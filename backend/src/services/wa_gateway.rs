@@ -22,7 +22,7 @@ pub async fn send(
     let raw_targets: Vec<&str> = request.target.split(',').map(str::trim).collect();
     if raw_targets.is_empty() || raw_targets.len() > 100 {
         return Err(ApiError::BadRequest(
-            "target must contain 1 to 100 international phone numbers",
+            "target must contain 1 to 100 international phone numbers".to_string(),
         ));
     }
     let targets: Option<Vec<String>> = raw_targets
@@ -31,11 +31,11 @@ pub async fn send(
         .collect();
     let Some(targets) = targets else {
         return Err(ApiError::BadRequest(
-            "target must contain full international numbers with country codes",
+            "target must contain full international numbers with country codes".to_string(),
         ));
     };
     if request.message.trim().is_empty() || request.message.len() > 4096 {
-        return Err(ApiError::BadRequest("message must contain 1 to 4096 bytes"));
+        return Err(ApiError::BadRequest("message must contain 1 to 4096 bytes".to_string()));
     }
     let mut queued = Vec::with_capacity(targets.len());
     for target in &targets {

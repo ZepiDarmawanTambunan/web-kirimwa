@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use crate::{error::ApiError, models::User};
 use sqlx::MySqlPool;
 
@@ -35,7 +36,7 @@ pub struct AdminUser {
     pub role: String,
     pub is_active: bool,
     pub api_key_prefix: Option<String>,
-    pub created_at: chrono::NaiveDateTime,
+    pub created_at: chrono::DateTime<Utc>,
 }
 
 pub async fn list(pool: &MySqlPool) -> Result<Vec<AdminUser>, ApiError> {

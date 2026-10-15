@@ -20,11 +20,11 @@ fn validate_credentials(credentials: &Credentials) -> Result<(String, String), A
     let email_pattern =
         Regex::new(r"^[^@\s]{1,64}@[^@\s]{1,255}\.[^@\s]{2,}$").map_err(|_| ApiError::Internal)?;
     if !email_pattern.is_match(&email) || email.len() > 254 {
-        return Err(ApiError::BadRequest("a valid email address is required"));
+        return Err(ApiError::BadRequest("a valid email address is required".to_string()));
     }
     if !(12..=128).contains(&credentials.password.len()) {
         return Err(ApiError::BadRequest(
-            "password must contain 12 to 128 characters",
+            "password must contain 12 to 128 characters".to_string(),
         ));
     }
     Ok((email, credentials.password.clone()))

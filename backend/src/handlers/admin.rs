@@ -37,7 +37,7 @@ pub async fn set_user_status(
     }
     if actor.id == id && !request.active {
         return Err(ApiError::BadRequest(
-            "administrators cannot deactivate their own account",
+            "administrators cannot deactivate their own account".to_string(),
         ));
     }
     if !users::set_active(&state.pool, &id, request.active).await? {

@@ -81,6 +81,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/healthz", get(|| async { "ok" }))
         .route("/api/v1/auth/register", post(handlers::auth::register))
         .route("/api/v1/auth/login", post(handlers::auth::login))
+        .route("/api/v1/devices", post(handlers::devices::register_device))
         .route(
             "/api/v1/webhooks/gateway/{secret}",
             post(handlers::webhooks::gateway_status),

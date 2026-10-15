@@ -9,7 +9,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum ApiError {
     #[error("Invalid request")]
-    BadRequest(&'static str),
+    BadRequest(String),
     #[error("Unauthorized")]
     Unauthorized,
     #[error("Forbidden")]
