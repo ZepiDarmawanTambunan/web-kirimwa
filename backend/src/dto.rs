@@ -38,7 +38,7 @@ pub struct QueuedMessage {
 }
 
 #[derive(Deserialize)]
-pub struct FonnteStatusWebhook {
+pub struct GatewayStatusWebhook {
     pub id: Option<serde_json::Value>,
     pub stateid: Option<serde_json::Value>,
     pub status: Option<String>,

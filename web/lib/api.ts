@@ -39,7 +39,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (response.status === 204) return undefined as T;
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new ApiRequestError(payload?.error?.message ?? "Permintaan gagal. Coba lagi.", response.status);
+    throw new ApiRequestError(payload?.error?.message ?? (response.status === 400 ? "Data tidak valid. Periksa input Anda." : response.status === 401 ? "Sesi berakhir. Silakan masuk kembali." : response.status === 404 ? "Data tidak ditemukan." : response.status === 500 ? "Terjadi kesalahan server." : "Permintaan gagal. Coba lagi."), response.status);
   }
   return payload as T;
 }

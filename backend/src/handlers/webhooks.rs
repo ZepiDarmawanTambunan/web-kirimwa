@@ -1,5 +1,5 @@
 use crate::{
-    dto::FonnteStatusWebhook, error::ApiError, extractors::ApiJson, repository::messages, AppState,
+    dto::GatewayStatusWebhook, error::ApiError, extractors::ApiJson, repository::messages, AppState,
 };
 use axum::{
     extract::{Path, State},
@@ -8,10 +8,10 @@ use axum::{
 };
 use subtle::ConstantTimeEq;
 
-pub async fn fonnte_status(
+pub async fn gateway_status(
     State(state): State<AppState>,
     Path(secret): Path<String>,
-    ApiJson(payload): ApiJson<FonnteStatusWebhook>,
+    ApiJson(payload): ApiJson<GatewayStatusWebhook>,
 ) -> Result<StatusCode, ApiError> {
     if secret
         .as_bytes()
@@ -61,9 +61,9 @@ pub async fn fonnte_status(
                 payload.state.as_deref(),
             )
             .await?;
-            tracing::info!("Fonnte status was buffered until the send response is persisted");
+            tracing::info!("Gateway status was buffered until the send response is persisted");
         } else {
-            tracing::warn!("Fonnte callback did not match a recorded message");
+            tracing::warn!("Gateway callback did not match a recorded message");
         }
     }
     Ok(StatusCode::NO_CONTENT)

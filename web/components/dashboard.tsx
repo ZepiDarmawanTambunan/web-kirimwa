@@ -167,7 +167,7 @@ export default function Dashboard() {
             <div className="mb-3 grid h-8 w-8 place-items-center rounded-lg bg-white text-emerald-700 shadow-sm"><CircleHelp size={16} /></div>
             <p className="text-xs font-semibold text-slate-800">Butuh bantuan?</p>
             <p className="mt-1 text-xs leading-5 text-slate-500">Lihat panduan integrasi API untuk memulai.</p>
-            <a className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-emerald-700" href="https://docs.fonnte.com/api-send-message/" target="_blank" rel="noreferrer">Dokumentasi <ArrowUpRight size={13} /></a>
+            <a className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-emerald-700" href="#" target="_blank" rel="noreferrer">Dokumentasi <ArrowUpRight size={13} /></a>
           </div>
         </aside>
 
@@ -177,7 +177,7 @@ export default function Dashboard() {
             <Button variant="secondary" size="sm" onClick={() => void loadMessages()}><RefreshCw size={14} /> Refresh data</Button>
           </div>
 
-          {error && <div role="alert" className="mb-5 flex items-start justify-between rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"><span>{error}</span><button type="button" aria-label="Tutup" onClick={() => setError("")}><X size={16} /></button></div>}
+          {error && <div role="alert" className="mb-5 flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50/70 px-4 py-3.5 text-sm text-rose-700 shadow-sm"><div className="mt-0.5 shrink-0 rounded-full bg-rose-200/50 p-1"><X size={14} /></div><div className="flex-1"><p className="font-medium">Terjadi kesalahan</p><p className="text-xs opacity-90 mt-0.5">{error}</p></div><button type="button" aria-label="Tutup" onClick={() => setError("")} className="shrink-0 rounded-lg hover:bg-rose-200/30 p-1"><X size={16} /></button></div>}
           {notice && <div role="status" className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</div>}
 
           {tab === "users" && account.role === "admin" ? (

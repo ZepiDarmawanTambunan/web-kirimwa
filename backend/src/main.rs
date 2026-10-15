@@ -82,8 +82,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/v1/auth/register", post(handlers::auth::register))
         .route("/api/v1/auth/login", post(handlers::auth::login))
         .route(
-            "/api/v1/webhooks/fonnte/{secret}",
-            post(handlers::webhooks::fonnte_status),
+            "/api/v1/webhooks/gateway/{secret}",
+            post(handlers::webhooks::gateway_status),
         )
         .nest("/api/v1", protected_session.merge(protected_messages))
         .layer(

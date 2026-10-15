@@ -190,3 +190,14 @@ pub async fn by_id_for_user(
     .fetch_optional(pool)
     .await?)
 }
+
+
+pub async fn count_recent_24h(pool: &MySqlPool, user_id: &str) -> Result<i64, ApiError> {
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM messages WHERE user_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)",
+    )
+    .bind(user_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(count)
+}

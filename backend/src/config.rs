@@ -2,7 +2,7 @@ use std::{env, io};
 
 pub struct Config {
     pub database_url: String,
-    pub fonnte_token: String,
+    pub gateway_token: Option<String>,
     pub jwt_secret: Vec<u8>,
     pub webhook_secret: String,
     pub web_origin: String,
@@ -36,7 +36,7 @@ impl Config {
         }
         Ok(Self {
             database_url: required("DATABASE_URL")?,
-            fonnte_token: required("FONNTE_TOKEN")?,
+            gateway_token: env::var("GATEWAY_TOKEN").ok(),
             jwt_secret,
             webhook_secret,
             web_origin: required("WEB_ORIGIN")?,

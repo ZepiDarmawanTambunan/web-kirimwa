@@ -67,7 +67,7 @@ export default function LoginPage() {
             <label htmlFor="password" className="block space-y-2 text-sm font-medium text-slate-700">Password
               <Input id="password" type="password" autoComplete={registering ? "new-password" : "current-password"} placeholder={registering ? "Minimal 12 karakter" : "Masukkan password"} value={password} onChange={(event) => setPassword(event.target.value)} required minLength={registering ? 12 : undefined} maxLength={128} />
             </label>
-            {error && <p role="alert" className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p>}
+            {error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50/70 px-4 py-3 text-sm text-rose-700"><p className="font-medium">Terjadi kesalahan</p><p className="text-xs mt-1 opacity-90">{error}</p></div>}
             <Button type="submit" className="w-full" disabled={busy}>{busy ? "Memproses..." : registering ? "Buat akun" : "Masuk"} <ArrowRight size={16} /></Button>
           </form>
           <p className="mt-7 text-center text-sm text-slate-500">

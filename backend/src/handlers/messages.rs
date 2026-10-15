@@ -4,7 +4,7 @@ use crate::{
     extractors::ApiJson,
     models::User,
     repository::messages,
-    services::fonnte,
+    services::wa_gateway,
     AppState,
 };
 use axum::{
@@ -23,7 +23,17 @@ pub async fn send(
     Extension(user): Extension<User>,
     ApiJson(request): ApiJson<SendMessageRequest>,
 ) -> Result<Json<SendMessageResponse>, ApiError> {
-    let queued = fonnte::send(&state, &user.id, request).await?;
+    // Limit: 50 messages per 24 hours (default limit)
+    const DAILY_LIMIT: i64 = 50;
+    let count_24h = crate::repository::messages::count_recent_24h(&state.pool, &user.id).await?;
+    let target_count = request.target.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).count() as i64;
+    if count_24h + target_count > DAILY_LIMIT {
+        return Err(ApiError::BadRequest(format!(
+            "Limit harian tercapai ({} / {}). Coba lagi nanti.",
+            DAILY_LIMIT, DAILY_LIMIT
+        )));
+    }
+    let queued = wa_gateway::send(&state, &user.id, request).await?;
     Ok(Json(SendMessageResponse { messages: queued }))
 }
 
