@@ -32,16 +32,58 @@ function validDeviceId(id) {
     return /^[0-9a-f-]{36}$/i.test(id);
 }
 
+// Baileys/whatsmeow keep a rolling cache of the last sent messages so the socket can
+// answer WhatsApp "retry receipt" requests. Without getMessage() the recipient phone
+// cannot decrypt the envelope and keeps showing "Waiting for this message. This may take a while."
+const MESSAGE_CACHE_LIMIT = 256;
+
+function createMessageCache() {
+    const cache = new Map();
+    return {
+        get(id) {
+            return id ? cache.get(id) : undefined;
+        },
+        remember(message) {
+            const id = message?.key?.id;
+            const content = message?.message;
+            if (!id || !content) return;
+            if (cache.has(id)) cache.delete(id);
+            cache.set(id, content);
+            while (cache.size > MESSAGE_CACHE_LIMIT) cache.delete(cache.keys().next().value);
+        },
+        size() {
+            return cache.size;
+        },
+    };
+}
+
 async function startSession(deviceId) {
     const current = sessions.get(deviceId);
     if (current && ['connecting', 'connected'].includes(current.status)) return current;
 
     const stateDirectory = path.join(authDirectory, deviceId);
     const { state, saveCreds } = await useMultiFileAuthState(stateDirectory);
-    const socket = makeWASocket({ auth: state, printQRInTerminal: false });
-    const session = { socket, status: 'connecting', qr_code: null, deleted: false };
+    const messageCache = createMessageCache();
+    const socket = makeWASocket({
+        auth: state,
+        printQRInTerminal: false,
+        markOnlineOnConnect: false,
+        getMessage: async (key) => {
+            const cached = messageCache.get(key?.id);
+            if (!cached) {
+                console.warn(`getMessage miss for ${key?.id} (cache=${messageCache.size()})`);
+                return undefined;
+            }
+            console.log(`getMessage hit for ${key?.id} — resending for retry request`);
+            return cached;
+        },
+    });
+    const session = { socket, status: 'connecting', qr_code: null, deleted: false, messageCache };
     sessions.set(deviceId, session);
     socket.ev.on('creds.update', saveCreds);
+    socket.ev.on('messages.upsert', ({ messages }) => {
+        for (const inbound of messages) messageCache.remember(inbound);
+    });
     socket.ev.on('connection.update', async (update) => {
         if (update.qr) {
             try {
@@ -93,7 +135,9 @@ app.post('/sessions/:deviceId', unauthorized, async (req, res) => {
     if (!validDeviceId(deviceId)) return res.status(400).json({ error: 'invalid_device_id' });
     try {
         const session = await startSession(deviceId);
-        return res.status(202).json({ status: session.status, qr_code: session.qr_code });
+        return res
+            .status(202)
+            .json({ status: session.status, qr_code: session.qr_code, cached_messages: session.messageCache.size() });
     } catch (error) {
         console.error('Failed to start Baileys session:', error.message);
         return res.status(502).json({ error: 'session_start_failed' });
@@ -103,8 +147,8 @@ app.post('/sessions/:deviceId', unauthorized, async (req, res) => {
 app.get('/sessions/:deviceId', unauthorized, (req, res) => {
     if (!validDeviceId(req.params.deviceId)) return res.status(400).json({ error: 'invalid_device_id' });
     const session = sessions.get(req.params.deviceId);
-    if (!session) return res.json({ status: 'disconnected', qr_code: null });
-    return res.json({ status: session.status, qr_code: session.qr_code });
+    if (!session) return res.json({ status: 'disconnected', qr_code: null, cached_messages: 0 });
+    return res.json({ status: session.status, qr_code: session.qr_code, cached_messages: session.messageCache.size() });
 });
 
 app.post('/sessions/:deviceId/messages', unauthorized, async (req, res) => {
@@ -124,7 +168,8 @@ app.post('/sessions/:deviceId/messages', unauthorized, async (req, res) => {
     try {
         const result = await session.socket.sendMessage(`${phone}@s.whatsapp.net`, { text: message });
         if (!result?.key?.id) return res.status(502).json({ error: 'message_not_accepted' });
-        return res.json({ message_id: result.key.id });
+        session.messageCache.remember(result);
+        return res.json({ message_id: result.key.id, status: 'accepted', cached: session.messageCache.size() });
     } catch (error) {
         console.error('Baileys message send failed:', error.message);
         return res.status(502).json({ error: 'message_send_failed' });

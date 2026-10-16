@@ -1,0 +1,16 @@
+-- Restore automatic defaults lost when converting TIMESTAMP to DATETIME.
+-- The Rust insert statements omit these columns and rely on the column default.
+
+ALTER TABLE users
+    MODIFY COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+ALTER TABLE devices
+    MODIFY COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+ALTER TABLE messages
+    MODIFY COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    MODIFY COLUMN updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP;
+
+ALTER TABLE pending_webhook_status
+    MODIFY COLUMN received_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP;

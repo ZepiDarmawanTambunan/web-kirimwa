@@ -5,6 +5,12 @@ use serde::{Deserialize, Serialize};
 pub struct SessionStatus {
     pub status: String,
     pub qr_code: Option<String>,
+    /// Jumlah pesan terkirim yang masih disimpan gateway.
+    ///
+    /// Cache ini dipakai Baileys untuk menjawab "retry receipt" WhatsApp; bila habis
+    /// (mis. setelah gateway restart) penerima bisa melihat "Menunggu pesan ini".
+    #[serde(default)]
+    pub cached_messages: Option<u64>,
 }
 
 #[derive(Deserialize)]

@@ -28,11 +28,7 @@ pub struct AppState {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    match dotenvy::dotenv() {
-        Ok(_) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(error.into()),
-    }
+    let _ = dotenvy::dotenv();
 
     if std::env::args().nth(1).as_deref() == Some("hash-admin-password") {
         let password = rpassword::prompt_password("Admin password (12-72 bytes): ")?;

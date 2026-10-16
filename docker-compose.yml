@@ -64,6 +64,9 @@ services:
     restart: unless-stopped
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?Set NEXT_PUBLIC_API_URL in .env}
+      # Next.js standalone (server.js) mengikat ke $HOSTNAME; Docker mengisinya dengan
+      # hostname container (IP internal), sehingga healthcheck 127.0.0.1:3000 gagal.
+      HOSTNAME: 0.0.0.0
     ports:
       - "${WEB_BIND:?Set WEB_BIND in .env}:${WEB_PORT:?Set WEB_PORT in .env}:3000"
     depends_on:

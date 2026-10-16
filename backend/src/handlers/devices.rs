@@ -169,6 +169,7 @@ pub async fn device_status(
         return Ok(Json(providers::SessionStatus {
             status: device.connection_status,
             qr_code: None,
+            cached_messages: None,
         }));
     }
     let session = providers::baileys_session_status(&state, &id).await?;
