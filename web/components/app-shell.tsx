@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { LayoutDashboard, Loader2, LogOut, MessageCircleMore, Smartphone } from "lucide-react";
+import { BookOpen, LayoutDashboard, Loader2, LogOut, MessageCircleMore, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/api";
@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { href: "/dashboard", label: "Beranda", icon: LayoutDashboard },
   { href: "/devices", label: "Koneksi WhatsApp", icon: Smartphone },
+  { href: "/docs", label: "Dokumentasi", icon: BookOpen },
 ];
 
 export function AppShell({

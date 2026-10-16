@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Activity,
+  BookOpen,
   CheckCheck,
   Clock3,
   ExternalLink,
@@ -388,11 +390,19 @@ export default function DashboardOverview() {
           </Alert>
         ) : null}
 
-        <div className="space-y-1">
-          <h1 className="text-xl font-semibold text-slate-900">Ringkasan pengiriman</h1>
-          <p className="text-sm text-slate-500">
-            Pantau status pesan, kirim pesan uji, dan kelola akses API dari satu halaman.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1">
+            <h1 className="text-xl font-semibold text-slate-900">Ringkasan pengiriman</h1>
+            <p className="text-sm text-slate-500">
+              Pantau status pesan, kirim pesan uji, dan kelola akses API dari satu halaman.
+            </p>
+          </div>
+          <Button variant="secondary" size="sm" asChild className="gap-2">
+            <Link href="/docs">
+              <BookOpen className="size-4" />
+              Panduan &amp; API
+            </Link>
+          </Button>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
