@@ -7,14 +7,14 @@ import {
   Code2, Copy, KeyRound, LogOut, Menu, MessageCircle, Plus, RefreshCw, Send,
   Settings2, ShieldCheck, Users, X,
 } from "lucide-react";
-import { api, ApiRequestError, type Account, type AdminUser, type Message } from "@/lib/api";
+import { api, ApiRequestError, type Account, type AdminUser, type Device, type Message } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 function Status({ value }: { value: string }) {
   const normalized = value.toLowerCase();
-  const color = normalized === "sent" ? "bg-emerald-50 text-emerald-700" :
+  const color = ["accepted", "sent", "delivered", "read"].includes(normalized) ? "bg-emerald-50 text-emerald-700" :
     ["failed", "invalid", "expired", "url unreachable"].includes(normalized) ? "bg-rose-50 text-rose-700" :
     normalized === "pending" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600";
   const label = normalized === "submissionunknown" ? "Status tidak diketahui" : value;
@@ -25,6 +25,8 @@ export default function Dashboard() {
   const router = useRouter();
   const [account, setAccount] = useState<Account | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [deviceId, setDeviceId] = useState("");
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [target, setTarget] = useState("");
   const [message, setMessage] = useState("");
@@ -49,6 +51,11 @@ export default function Dashboard() {
         setAccount(me);
         const result = await api<{ messages: Message[] }>("/messages?limit=50");
         if (mounted) setMessages(result.messages);
+        const deviceResult = await api<Device[]>("/devices");
+        if (mounted) {
+          setDevices(deviceResult);
+          setDeviceId((current) => current || deviceResult.find((device) => device.is_active)?.id || "");
+        }
         if (me.role === "admin") {
           const adminUsers = await api<AdminUser[]>("/admin/users");
           if (mounted) setUsers(adminUsers);
@@ -84,9 +91,12 @@ export default function Dashboard() {
     try {
       const result = await api<{ messages: Message[] }>("/messages", {
         method: "POST",
-        body: JSON.stringify({ target, message }),
+        body: JSON.stringify({ device_id: deviceId, target, message }),
       });
-      setNotice(`${result.messages.length} pesan masuk antrean pengiriman.`);
+      const failed = result.messages.filter((item) => item.status === "Failed").length;
+      setNotice(failed
+        ? `${result.messages.length - failed} diterima provider, ${failed} gagal. Periksa koneksi dan kredensial provider.`
+        : `${result.messages.length} pesan diterima provider; status ini belum mengonfirmasi pengantaran ke penerima.`);
       setMessage("");
       await loadMessages();
     } catch (failure) {
@@ -133,7 +143,7 @@ export default function Dashboard() {
     );
   }
 
-  const sentCount = messages.filter((item) => item.status.toLowerCase() === "sent").length;
+  const sentCount = messages.filter((item) => ["accepted", "sent"].includes(item.status.toLowerCase())).length;
   const pendingCount = messages.filter((item) => ["processing", "pending", "waiting", "submissionunknown"].includes(item.status.toLowerCase())).length;
   const failedCount = messages.filter((item) => ["failed", "invalid", "expired", "url unreachable"].includes(item.status.toLowerCase())).length;
 
@@ -162,12 +172,13 @@ export default function Dashboard() {
           {account.role === "admin" && <button type="button" onClick={() => { setTab("users"); setMobileMenu(false); }} className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium ${tab === "users" ? "bg-emerald-50 text-emerald-800" : "text-slate-600 hover:bg-slate-50"}`}><Users size={17} /> Pengguna</button>}
           <p className="mb-3 mt-8 px-3 text-[10px] font-bold uppercase tracking-[.16em] text-slate-400">Developer</p>
           <button type="button" onClick={() => document.getElementById("api-access")?.scrollIntoView({ behavior: "smooth" })} className="mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"><Code2 size={17} /> API & integrasi</button>
+          <button type="button" onClick={() => router.push("/devices")} className="mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"><Settings2 size={17} /> Koneksi WhatsApp</button>
           <button type="button" disabled className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-400 disabled:cursor-not-allowed"><Settings2 size={17} /> Pengaturan</button>
           <div className="mt-10 rounded-2xl bg-[#f5f9f7] p-4">
             <div className="mb-3 grid h-8 w-8 place-items-center rounded-lg bg-white text-emerald-700 shadow-sm"><CircleHelp size={16} /></div>
             <p className="text-xs font-semibold text-slate-800">Butuh bantuan?</p>
             <p className="mt-1 text-xs leading-5 text-slate-500">Lihat panduan integrasi API untuk memulai.</p>
-            <a className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-emerald-700" href="#" target="_blank" rel="noreferrer">Dokumentasi <ArrowUpRight size={13} /></a>
+            <a className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-emerald-700" href="https://developers.facebook.com/documentation/business-messaging/whatsapp/about-the-platform" target="_blank" rel="noreferrer">Dokumentasi <ArrowUpRight size={13} /></a>
           </div>
         </aside>
 
@@ -190,7 +201,7 @@ export default function Dashboard() {
           ) : (
             <>
               <div className="mb-6 grid gap-4 sm:grid-cols-3">
-                <Metric label="Pesan terkirim" value={String(sentCount)} detail="Dari 50 pesan terakhir" icon={<ArrowUpRight size={17} />} color="text-emerald-700 bg-emerald-50" />
+                <Metric label="Diterima provider" value={String(sentCount)} detail="Belum tentu sudah terkirim ke penerima" icon={<ArrowUpRight size={17} />} color="text-emerald-700 bg-emerald-50" />
                 <Metric label="Dalam proses" value={String(pendingCount)} detail="Menunggu update status" icon={<Clock3 size={17} />} color="text-amber-700 bg-amber-50" />
                 <Metric label="Perlu perhatian" value={String(failedCount)} detail="Gagal / nomor tidak valid" icon={<Activity size={17} />} color="text-rose-700 bg-rose-50" />
               </div>
@@ -200,13 +211,25 @@ export default function Dashboard() {
                   <CardHeader className="border-b border-slate-100 pb-5"><div className="flex items-center justify-between"><div><CardTitle>Kirim pesan WhatsApp</CardTitle><CardDescription className="mt-1">Kirim pesan langsung ke satu atau beberapa nomor.</CardDescription></div><div className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><Send size={17} /></div></div></CardHeader>
                   <CardContent className="pt-5">
                     <form onSubmit={sendMessage} className="space-y-4">
+                      {devices.length > 0 ? (
+                        <label htmlFor="device" className="block space-y-2 text-sm font-medium text-slate-700">Koneksi pengirim
+                          <select id="device" value={deviceId} onChange={(event) => setDeviceId(event.target.value)} required className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10">
+                            {devices.filter((device) => device.is_active).map((device) => <option key={device.id} value={device.id}>{device.device_name} · {device.provider === "meta_cloud" ? "Meta" : "Baileys"} · {device.connection_status}</option>)}
+                          </select>
+                        </label>
+                      ) : (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                          Tambahkan dan hubungkan device terlebih dahulu.
+                          <Button type="button" variant="secondary" size="sm" className="ml-3" onClick={() => router.push("/devices")}>Atur koneksi</Button>
+                        </div>
+                      )}
                       <label htmlFor="target" className="block space-y-2 text-sm font-medium text-slate-700">Nomor tujuan <span className="font-normal text-slate-400">Pisahkan dengan koma</span>
                         <Input id="target" value={target} onChange={(event) => setTarget(event.target.value)} placeholder="628123456789, 628987654321" required />
                       </label>
                       <label htmlFor="message" className="block space-y-2 text-sm font-medium text-slate-700">Isi pesan
                         <textarea id="message" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Tulis pesan WhatsApp Anda..." rows={5} maxLength={4096} required className="w-full resize-y rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10" />
                       </label>
-                      <div className="flex flex-wrap items-center justify-between gap-3 pt-1"><span className="text-xs text-slate-400">{message.length} / 4096 karakter</span><Button type="submit" disabled={busy || !message.trim()}><Send size={15} /> {busy ? "Mengirim..." : "Kirim pesan"}</Button></div>
+                      <div className="flex flex-wrap items-center justify-between gap-3 pt-1"><span className="text-xs text-slate-400">{message.length} / 4096 karakter</span><Button type="submit" disabled={busy || !message.trim() || !devices.some((device) => device.is_active && device.id === deviceId)}><Send size={15} /> {busy ? "Mengirim..." : "Kirim pesan"}</Button></div>
                     </form>
                   </CardContent>
                 </Card>
@@ -217,7 +240,7 @@ export default function Dashboard() {
                     <div className="flex items-start gap-2.5 rounded-xl border border-amber-100 bg-amber-50/70 p-3.5 text-xs leading-5 text-amber-900"><ShieldCheck size={16} className="mt-0.5 shrink-0" /><span>API key hanya ditampilkan satu kali. Simpan dengan aman dan jangan bagikan ke siapa pun.</span></div>
                     {apiKey ? <div className="space-y-2"><p className="text-xs font-semibold text-slate-600">API key baru Anda</p><div className="flex gap-2"><code className="min-w-0 flex-1 break-all rounded-lg bg-slate-950 p-3 text-xs leading-5 text-emerald-200">{apiKey}</code><Button variant="secondary" size="icon" aria-label="Salin API key" onClick={() => void navigator.clipboard.writeText(apiKey)}><Copy size={15} /></Button></div></div> : <div className="flex items-center justify-between rounded-xl border border-dashed border-slate-200 p-3.5"><span className="font-mono text-xs text-slate-400">wag_••••••••••••</span><span className="text-xs text-slate-400">Tidak ditampilkan</span></div>}
                     <Button variant="secondary" className="w-full" onClick={() => void createApiKey()}><Plus size={15} /> {apiKey ? "Rotasi API key" : "Buat API key"}</Button>
-                    <div className="rounded-xl bg-slate-950 p-4"><div className="mb-3 flex items-center justify-between text-[11px] font-medium text-slate-400"><span>Contoh request</span><span className="rounded bg-slate-800 px-1.5 py-0.5 text-emerald-300">cURL</span></div><pre className="overflow-x-auto text-[11px] leading-5 text-slate-200"><code>{`curl -X POST \\\n  ${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"}/api/v1/messages \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"target":"628123456789","message":"Halo!"}'`}</code></pre></div>
+                    <div className="rounded-xl bg-slate-950 p-4"><div className="mb-3 flex items-center justify-between text-[11px] font-medium text-slate-400"><span>Contoh request</span><span className="rounded bg-slate-800 px-1.5 py-0.5 text-emerald-300">cURL</span></div><pre className="overflow-x-auto text-[11px] leading-5 text-slate-200"><code>{`curl -X POST \\\n  ${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/v1/messages \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"device_id":"<device-uuid>","target":"628123456789","message":"Halo!"}'`}</code></pre></div>
                   </CardContent>
                 </Card>
               </div>

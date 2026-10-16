@@ -35,7 +35,9 @@ pub async fn gateway_status(
             .is_some_and(|status| !valid_status(status))
         || payload.state.as_ref().is_some_and(|state| state.len() > 64)
     {
-        return Err(ApiError::BadRequest("webhook contains invalid status data".to_string()));
+        return Err(ApiError::BadRequest(
+            "webhook contains invalid status data".to_string(),
+        ));
     }
     let affected = if let Some(provider_id) = provider_id {
         messages::update_status(
@@ -49,7 +51,9 @@ pub async fn gateway_status(
     } else if let Some(state_id) = state_id.as_deref() {
         messages::update_state(&state.pool, state_id, payload.state.as_deref()).await?
     } else {
-        return Err(ApiError::BadRequest("id or stateid is required".to_string()));
+        return Err(ApiError::BadRequest(
+            "id or stateid is required".to_string(),
+        ));
     };
     if !affected {
         if let Some(provider_id) = payload.id.as_ref().and_then(value_as_string) {
@@ -73,6 +77,9 @@ fn valid_status(status: &str) -> bool {
     matches!(
         status.to_ascii_lowercase().as_str(),
         "sent"
+            | "accepted"
+            | "delivered"
+            | "read"
             | "processing"
             | "pending"
             | "waiting"

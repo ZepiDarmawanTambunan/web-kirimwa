@@ -1,5 +1,5 @@
-use chrono::{DateTime, Utc};
 use crate::{error::ApiError, models::User};
+use chrono::{DateTime, Utc};
 use sqlx::MySqlPool;
 
 pub async fn by_email(pool: &MySqlPool, email: &str) -> Result<Option<User>, ApiError> {

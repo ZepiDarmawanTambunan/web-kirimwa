@@ -1,6 +1,6 @@
 "use client";
 
-export default function Error({ error }: { error: Error }) {
+export default function ErrorPage({ error }: { error: Error }) {
   return (
     <main className="grid min-h-screen place-items-center px-6 text-center">
       <div>

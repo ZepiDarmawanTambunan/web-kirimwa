@@ -15,6 +15,7 @@ pub struct User {
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct Message {
     pub id: String,
+    pub device_id: Option<String>,
     pub target: String,
     pub body: String,
     pub provider_id: Option<String>,

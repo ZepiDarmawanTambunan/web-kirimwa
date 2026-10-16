@@ -20,41 +20,60 @@ services:
       context: ./backend
     restart: unless-stopped
     environment:
-      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
-      GATEWAY_TOKEN: ${GATEWAY_TOKEN:-}
+      APP_ENV: production
+      DATABASE_URL: "mysql://${MYSQL_USER:-wa_gateway}:${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}@mysql:3306/${MYSQL_DATABASE:-wa_gateway}"
+      GATEWAY_TOKEN: ${GATEWAY_TOKEN:?Set GATEWAY_TOKEN in .env}
+      BAILEYS_GATEWAY_URL: ${BAILEYS_GATEWAY_URL_DOCKER:?Set BAILEYS_GATEWAY_URL_DOCKER in .env}
+      DEVICE_CREDENTIALS_KEY: ${DEVICE_CREDENTIALS_KEY:?Set DEVICE_CREDENTIALS_KEY in .env}
+      META_GRAPH_API_VERSION: ${META_GRAPH_API_VERSION:-v24.0}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:?Set WEBHOOK_SECRET in .env}
-      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3003}
-      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:?Set BOOTSTRAP_ADMIN_EMAIL in .env}
+      BOOTSTRAP_ADMIN_PASSWORD_HASH: ${BOOTSTRAP_ADMIN_PASSWORD_HASH:?Set BOOTSTRAP_ADMIN_PASSWORD_HASH in .env}
+      WEB_ORIGIN: ${WEB_ORIGIN:?Set WEB_ORIGIN in .env}
+      COOKIE_SECURE: ${COOKIE_SECURE:?Set COOKIE_SECURE in .env}
       BIND_ADDRESS: 0.0.0.0:8080
     ports:
-      - "8081:8080"
+      - "${API_BIND:?Set API_BIND in .env}:${API_PORT:?Set API_PORT in .env}:8080"
     depends_on:
       mysql:
+        condition: service_healthy
+      baileys:
         condition: service_healthy
 
   baileys:
     build: ./baileys
     restart: unless-stopped
+    environment:
+      GATEWAY_TOKEN: ${GATEWAY_TOKEN:?Set GATEWAY_TOKEN in .env}
+      BACKEND_STATUS_WEBHOOK_URL: ${BACKEND_STATUS_WEBHOOK_BASE_DOCKER:?Set BACKEND_STATUS_WEBHOOK_BASE_DOCKER in .env}/api/v1/webhooks/gateway/${WEBHOOK_SECRET:?Set WEBHOOK_SECRET in .env}
+      BAILEYS_PORT: ${BAILEYS_PORT:?Set BAILEYS_PORT in .env}
     volumes:
       - baileys_auth:/app/auth_info
-    ports:
-      - "4000:4000"
-    depends_on:
-      - mysql
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:${BAILEYS_PORT:?Set BAILEYS_PORT in .env}/status').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   web:
     build:
       context: ./web
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8081}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?Set NEXT_PUBLIC_API_URL in .env}
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8081}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?Set NEXT_PUBLIC_API_URL in .env}
     ports:
-      - "3003:3000"
+      - "${WEB_BIND:?Set WEB_BIND in .env}:${WEB_PORT:?Set WEB_PORT in .env}:3000"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
 volumes:
   web_kirimwa_mysql_data:

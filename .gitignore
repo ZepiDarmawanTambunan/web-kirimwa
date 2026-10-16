@@ -5,3 +5,4 @@ target/
 coverage/
 *.log
 *.tsbuildinfo
+baileys/auth_info/

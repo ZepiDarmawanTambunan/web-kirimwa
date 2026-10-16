@@ -1,14 +1,23 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 export type Account = { id: string; email: string; role: "admin" | "user" };
 export type Message = {
   id: string;
+  device_id: string | null;
   target: string;
   body: string;
   provider_id: string | null;
   status: string;
   state: string | null;
   created_at: string;
+};
+export type Device = {
+  id: string;
+  device_name: string;
+  phone_number: string;
+  provider: "meta_cloud" | "baileys";
+  is_active: boolean;
+  connection_status: string;
 };
 export type AdminUser = {
   id: string;

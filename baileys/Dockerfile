@@ -1,6 +1,8 @@
 FROM node:20-alpine
-RUN apk add --no-cache git
 WORKDIR /app
-COPY package.json index.js .
-RUN npm install --no-audit --no-fund --legacy-peer-deps
+COPY package*.json ./
+COPY index.js ./
+RUN npm ci --no-audit --no-fund --legacy-peer-deps
+RUN mkdir -p /app/auth_info && chown -R node:node /app
+USER node
 CMD ["node", "index.js"]

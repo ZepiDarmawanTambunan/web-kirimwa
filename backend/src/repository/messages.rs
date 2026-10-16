@@ -1,19 +1,74 @@
 use crate::{error::ApiError, models::Message};
 use sqlx::MySqlPool;
 
-pub async fn insert_many(
+pub async fn insert_many_with_daily_limit(
     pool: &MySqlPool,
     user_id: &str,
+    device_id: &str,
     entries: &[(String, String)],
     body: &str,
+    daily_limit: i64,
 ) -> Result<(), ApiError> {
     let mut transaction = pool.begin().await?;
+
+    sqlx::query_scalar::<_, String>("SELECT id FROM users WHERE id = ? FOR UPDATE")
+        .bind(user_id)
+        .fetch_optional(&mut *transaction)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+
+    let count_24h: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM messages WHERE user_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)",
+    )
+    .bind(user_id)
+    .fetch_one(&mut *transaction)
+    .await?;
+    let attempted_count = count_24h.saturating_add(entries.len() as i64);
+    if attempted_count > daily_limit {
+        return Err(ApiError::BadRequest(format!(
+            "Limit harian tercapai ({} / {}). Coba lagi nanti.",
+            attempted_count, daily_limit
+        )));
+    }
+
     for (id, target) in entries {
-        sqlx::query("INSERT INTO messages (id, user_id, target, body, status) VALUES (?, ?, ?, ?, 'Processing')")
+        sqlx::query("INSERT INTO messages (id, user_id, device_id, target, body, status) VALUES (?, ?, ?, ?, ?, 'Processing')")
             .bind(id)
             .bind(user_id)
+            .bind(device_id)
             .bind(target)
             .bind(body)
+            .execute(&mut *transaction)
+            .await?;
+    }
+    transaction.commit().await?;
+    Ok(())
+}
+
+pub async fn set_provider_result(
+    pool: &MySqlPool,
+    id: &str,
+    provider_id: Option<&str>,
+    status: &str,
+) -> Result<(), ApiError> {
+    let mut transaction = pool.begin().await?;
+    sqlx::query("UPDATE messages SET provider_id = ?, status = ? WHERE id = ?")
+        .bind(provider_id)
+        .bind(status)
+        .bind(id)
+        .execute(&mut *transaction)
+        .await?;
+    if let Some(provider_id) = provider_id {
+        sqlx::query(
+            "UPDATE messages AS m JOIN pending_webhook_status AS p ON p.provider_id = m.provider_id \
+             SET m.state_id = COALESCE(p.state_id, m.state_id), m.status = COALESCE(p.status, m.status), \
+             m.state = COALESCE(p.state, m.state) WHERE m.id = ?",
+        )
+        .bind(id)
+        .execute(&mut *transaction)
+        .await?;
+        sqlx::query("DELETE FROM pending_webhook_status WHERE provider_id = ?")
+            .bind(provider_id)
             .execute(&mut *transaction)
             .await?;
     }
@@ -141,11 +196,33 @@ pub async fn store_pending_status(
     status: Option<&str>,
     state: Option<&str>,
 ) -> Result<(), ApiError> {
+    let mut transaction = pool.begin().await?;
     sqlx::query(
         "DELETE FROM pending_webhook_status WHERE received_at < CURRENT_TIMESTAMP() - INTERVAL 1 DAY",
     )
-    .execute(pool)
+    .execute(&mut *transaction)
     .await?;
+    let updated = sqlx::query(
+        "UPDATE messages SET state_id = COALESCE(?, state_id), status = COALESCE(?, status), \
+         state = COALESCE(?, state) WHERE provider_id = ?",
+    )
+    .bind(state_id)
+    .bind(status)
+    .bind(state)
+    .bind(provider_id)
+    .execute(&mut *transaction)
+    .await?;
+    if updated.rows_affected() > 0
+        || sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM messages WHERE provider_id = ?)",
+        )
+        .bind(provider_id)
+        .fetch_one(&mut *transaction)
+        .await?
+    {
+        transaction.commit().await?;
+        return Ok(());
+    }
     sqlx::query(
         "INSERT INTO pending_webhook_status (provider_id, state_id, status, state) \
          VALUES (?, ?, ?, ?) AS incoming \
@@ -158,8 +235,9 @@ pub async fn store_pending_status(
     .bind(state_id)
     .bind(status)
     .bind(state)
-    .execute(pool)
+    .execute(&mut *transaction)
     .await?;
+    transaction.commit().await?;
     Ok(())
 }
 
@@ -169,7 +247,7 @@ pub async fn list_for_user(
     limit: u32,
 ) -> Result<Vec<Message>, ApiError> {
     Ok(sqlx::query_as::<_, Message>(
-        "SELECT id, target, body, provider_id, status, state, created_at FROM messages WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+        "SELECT id, device_id, target, body, provider_id, status, state, created_at FROM messages WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
     )
     .bind(user_id)
     .bind(limit)
@@ -183,21 +261,10 @@ pub async fn by_id_for_user(
     message_id: &str,
 ) -> Result<Option<Message>, ApiError> {
     Ok(sqlx::query_as::<_, Message>(
-        "SELECT id, target, body, provider_id, status, state, created_at FROM messages WHERE user_id = ? AND id = ?",
+        "SELECT id, device_id, target, body, provider_id, status, state, created_at FROM messages WHERE user_id = ? AND id = ?",
     )
     .bind(user_id)
     .bind(message_id)
     .fetch_optional(pool)
     .await?)
-}
-
-
-pub async fn count_recent_24h(pool: &MySqlPool, user_id: &str) -> Result<i64, ApiError> {
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM messages WHERE user_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)",
-    )
-    .bind(user_id)
-    .fetch_one(pool)
-    .await?;
-    Ok(count)
 }

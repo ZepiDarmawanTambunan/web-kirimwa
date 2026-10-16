@@ -21,6 +21,7 @@ pub struct ApiKeyResponse {
 
 #[derive(Deserialize)]
 pub struct SendMessageRequest {
+    pub device_id: String,
     pub target: String,
     pub message: String,
 }
@@ -33,6 +34,7 @@ pub struct SendMessageResponse {
 #[derive(Serialize)]
 pub struct QueuedMessage {
     pub id: String,
+    pub device_id: String,
     pub target: String,
     pub status: String,
 }

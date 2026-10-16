@@ -59,8 +59,6 @@ pub fn new_api_key() -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::seeds::ADMIN_PASSWORD;
-
     use super::{hash_api_key, hash_password, new_api_key, verify_password};
 
     #[test]
@@ -72,8 +70,9 @@ mod tests {
 
     #[test]
     fn bcrypt_password_hash_verifies_only_the_original_password() {
-        let hash = bcrypt::hash(ADMIN_PASSWORD, bcrypt::DEFAULT_COST).expect("hash password");
-        assert!(verify_password(ADMIN_PASSWORD, &hash));
+        let password = "a-long-password-123";
+        let hash = bcrypt::hash(password, bcrypt::DEFAULT_COST).expect("hash password");
+        assert!(verify_password(password, &hash));
         assert!(!verify_password("wrong-password", &hash));
     }
 

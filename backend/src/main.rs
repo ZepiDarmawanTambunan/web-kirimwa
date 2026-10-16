@@ -28,6 +28,21 @@ pub struct AppState {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    match dotenvy::dotenv() {
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
+
+    if std::env::args().nth(1).as_deref() == Some("hash-admin-password") {
+        let password = rpassword::prompt_password("Admin password (12-72 bytes): ")?;
+        if !(12..=72).contains(&password.len()) {
+            return Err("Admin password must contain 12 to 72 bytes".into());
+        }
+        println!("{}", bcrypt::hash(password, bcrypt::DEFAULT_COST)?);
+        return Ok(());
+    }
+
     tracing_subscriber::fmt()
         .json()
         .with_env_filter(
@@ -42,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .connect(&config.database_url)
         .await?;
     sqlx::migrate!("./migrations").run(&pool).await?;
-    seeds::seed_admin(&pool).await?;
+    seeds::seed_admin(&pool, &config).await?;
 
     let state = AppState {
         pool,
@@ -57,6 +72,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/auth/logout", post(handlers::auth::logout))
         .route("/auth/api-key", post(handlers::auth::rotate_api_key))
         .route("/admin/users", get(handlers::admin::list_users))
+        .route(
+            "/devices",
+            get(handlers::devices::list_devices).post(handlers::devices::register_device),
+        )
+        .route(
+            "/devices/{id}",
+            axum::routing::delete(handlers::devices::delete_device),
+        )
+        .route(
+            "/devices/{id}/connect",
+            post(handlers::devices::connect_device),
+        )
+        .route(
+            "/devices/{id}/status",
+            get(handlers::devices::device_status),
+        )
         .route(
             "/admin/users/{id}",
             axum::routing::patch(handlers::admin::set_user_status),
@@ -81,7 +112,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/healthz", get(|| async { "ok" }))
         .route("/api/v1/auth/register", post(handlers::auth::register))
         .route("/api/v1/auth/login", post(handlers::auth::login))
-        .route("/api/v1/devices", post(handlers::devices::register_device))
         .route(
             "/api/v1/webhooks/gateway/{secret}",
             post(handlers::webhooks::gateway_status),
@@ -91,7 +121,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             CorsLayer::new()
                 .allow_origin(config.web_origin.parse::<http::HeaderValue>()?)
                 .allow_credentials(true)
-                .allow_methods([http::Method::GET, http::Method::POST, http::Method::PATCH, http::Method::OPTIONS])
+                .allow_methods([
+                    http::Method::GET,
+                    http::Method::POST,
+                    http::Method::PATCH,
+                    http::Method::DELETE,
+                    http::Method::OPTIONS,
+                ])
                 .allow_headers([
                     http::header::CONTENT_TYPE,
                     http::header::AUTHORIZATION,
