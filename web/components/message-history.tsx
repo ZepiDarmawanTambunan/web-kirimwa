@@ -184,7 +184,8 @@ export function MessageHistory({
         {error ? <Alert tone="danger" title="Gagal memuat riwayat">{error}</Alert> : null}
 
         {loading && messages.length === 0 ? (
-          <div className="space-y-3">
+          <div className="space-y-3" role="status" aria-busy="true" aria-live="polite">
+            <span className="sr-only">Memuat riwayat pesan…</span>
             {[0, 1, 2].map((key) => (
               <Skeleton key={key} className="h-16 w-full" />
             ))}

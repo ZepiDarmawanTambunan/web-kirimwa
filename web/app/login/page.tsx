@@ -33,7 +33,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-screen bg-white lg:grid-cols-[1fr_1fr]">
+    <main className="grid min-h-dvh bg-white lg:grid-cols-2">
       <section className="relative hidden overflow-hidden bg-[#082f26] px-14 py-12 text-white lg:flex lg:flex-col lg:justify-between">
         <div className="absolute -right-28 -top-20 h-[480px] w-[480px] rounded-full border border-white/10" />
         <div className="absolute -right-4 top-8 h-[330px] w-[330px] rounded-full border border-white/10" />

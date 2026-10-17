@@ -32,7 +32,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, Hint, Select, Textarea } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -391,11 +390,16 @@ export default function DashboardOverview() {
         ) : null}
 
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <h1 className="text-xl font-semibold text-slate-900">Ringkasan pengiriman</h1>
-            <p className="text-sm text-slate-500">
-              Pantau status pesan, kirim pesan uji, dan kelola akses API dari satu halaman.
-            </p>
+          <div className="flex items-start gap-3">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-sm">
+              <MessageSquare className="size-5" />
+            </span>
+            <div className="space-y-1">
+              <h1 className="text-xl font-semibold tracking-tight text-slate-900">Ringkasan pengiriman</h1>
+              <p className="text-sm text-slate-500">
+                Pantau status pesan, kirim pesan uji, dan kelola akses API dari satu halaman.
+              </p>
+            </div>
           </div>
           <Button variant="secondary" size="sm" asChild className="gap-2">
             <Link href="/docs">
@@ -405,9 +409,19 @@ export default function DashboardOverview() {
           </Button>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div
+          className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+          role={loading ? "status" : undefined}
+          aria-busy={loading || undefined}
+          aria-live={loading ? "polite" : undefined}
+        >
           {loading ? (
-            Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-[92px] rounded-2xl" />)
+            <>
+              <span className="sr-only">Memuat ringkasan pengiriman…</span>
+              {Array.from({ length: 4 }, (_, i) => i + 1).map((n) => (
+                <Skeleton key={`metrik-${n}`} className="h-[92px] rounded-2xl" />
+              ))}
+            </>
           ) : (
             <>
               <Metric
@@ -458,7 +472,15 @@ export default function DashboardOverview() {
             </Badge>
           </CardHeader>
           <CardContent className="space-y-2">
-            <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-2 w-full overflow-hidden rounded-full bg-slate-100"
+              role="progressbar"
+              aria-label="Pemakaian kuota harian"
+              aria-valuemin={0}
+              aria-valuemax={DAILY_QUOTA}
+              aria-valuenow={Math.min(quotaUsed, DAILY_QUOTA)}
+              aria-valuetext={`${formatNumber(quotaUsed)} dari ${formatNumber(DAILY_QUOTA)} pesan`}
+            >
               <div
                 className={cn(
                   "h-full rounded-full transition-all",

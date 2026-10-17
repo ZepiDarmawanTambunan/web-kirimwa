@@ -47,9 +47,15 @@ export function AppShell({
 
   return (
     <div className="min-h-dvh bg-slate-50">
+      <a
+        href="#konten"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-50 focus:rounded-lg focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-emerald-800 focus:shadow-lg focus:ring-1 focus:ring-emerald-200"
+      >
+        Lompat ke konten utama
+      </a>
       <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/85 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4 sm:px-6">
-          <Link href="/dashboard" className="flex items-center gap-2.5">
+        <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:gap-4 sm:px-6">
+          <Link href="/dashboard" className="flex shrink-0 items-center gap-2.5">
             <span className="flex size-9 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm">
               <MessageCircleMore className="size-5" />
             </span>
@@ -59,13 +65,15 @@ export function AppShell({
             </span>
           </Link>
 
-          <nav aria-label="Navigasi utama" className="ml-2 flex items-center gap-1">
+          <nav aria-label="Navigasi utama" className="flex shrink-0 items-center gap-1">
             {NAV.map((item) => {
               const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
               return (
                 <Link
                   key={item.href}
                   href={item.href}
+                  aria-label={item.label}
+                  title={item.label}
                   aria-current={active ? "page" : undefined}
                   className={cn(
                     "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition",
@@ -73,23 +81,33 @@ export function AppShell({
                   )}
                 >
                   <item.icon className="size-4" />
-                  <span className="hidden md:inline">{item.label}</span>
+                  <span className="hidden xl:inline">{item.label}</span>
                 </Link>
               );
             })}
           </nav>
 
-          <div className="ml-auto flex items-center gap-2 sm:gap-3">
-            <div className="hidden items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 sm:flex">
-              <span className="flex size-7 items-center justify-center rounded-lg bg-slate-900 text-[11px] font-semibold text-white">
+          <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-3">
+            <div className="hidden min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 lg:flex">
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-[11px] font-semibold text-white">
                 {initials(email)}
               </span>
-              <span className="flex flex-col leading-tight">
-                <span className="max-w-[13rem] truncate text-xs font-medium text-slate-800">{email}</span>
+              <span className="flex min-w-0 flex-col leading-tight">
+                <span className="max-w-[7rem] truncate text-xs font-medium text-slate-800 xl:max-w-[12rem]">
+                  {email}
+                </span>
                 <span className="text-[11px] text-slate-500">{role === "admin" ? "Administrator" : "Pengguna"}</span>
               </span>
             </div>
-            <Button variant="ghost" size="sm" onClick={handleLogout} disabled={loggingOut} className="gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogout}
+              disabled={loggingOut}
+              aria-label="Keluar"
+              title="Keluar"
+              className="shrink-0 gap-2"
+            >
               {loggingOut ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
               <span className="hidden sm:inline">Keluar</span>
             </Button>
@@ -97,7 +115,7 @@ export function AppShell({
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
+      <main id="konten" tabIndex={-1} className="mx-auto max-w-6xl scroll-mt-20 space-y-6 px-4 py-6 outline-none sm:px-6 sm:py-8">
         {banner}
         {children}
       </main>

@@ -33,7 +33,7 @@ export function Alert({
       {icon ? <span className="mt-0.5 shrink-0">{icon}</span> : null}
       <div className="min-w-0 flex-1 space-y-1">
         {title ? <p className="font-semibold">{title}</p> : null}
-        {children ? <div className="leading-relaxed opacity-90">{children}</div> : null}
+        {children ? <div className="break-words leading-relaxed opacity-90">{children}</div> : null}
       </div>
       {action ? <div className="shrink-0 self-center">{action}</div> : null}
     </div>

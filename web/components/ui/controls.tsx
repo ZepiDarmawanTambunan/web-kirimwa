@@ -1,8 +1,9 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-export function Label({ className, ...props }: React.LabelHTMLAttributes<HTMLLabelElement>) {
-  return <label className={cn("text-sm font-medium text-slate-700", className)} {...props} />;
+export function Label({ className, htmlFor, ...props }: React.LabelHTMLAttributes<HTMLLabelElement>) {
+  // biome-ignore lint/a11y/noLabelWithoutControl: primitif label — teks & htmlFor selalu diisi oleh <Field> (htmlFor turunan selalu ada saat render).
+  return <label htmlFor={htmlFor} className={cn("text-sm font-medium text-slate-700", className)} {...props} />;
 }
 
 export function Field({
@@ -20,16 +21,34 @@ export function Field({
   children: React.ReactNode;
   className?: string;
 }) {
+  const base = htmlFor ?? `field-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+  const errorId = `${base}-error`;
+  const hintId = `${base}-hint`;
+  const describedBy = error ? errorId : hint ? hintId : undefined;
+
+  // Hubungkan pesan error/hint ke kontrol lewat aria agar pembaca layar membacanya.
+  // Kontrol juga diberi `id` bila belum punya, agar label selalu terasosiasi.
+  const control =
+    React.isValidElement(children) && children.type !== React.Fragment
+      ? React.cloneElement(children as React.ReactElement<Record<string, unknown>>, {
+          id: (children.props as { id?: string }).id ?? base,
+          "aria-invalid": error ? true : undefined,
+          "aria-describedby": describedBy,
+        })
+      : children;
+
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <Label htmlFor={htmlFor}>{label}</Label>
-      {children}
+      <Label htmlFor={base}>{label}</Label>
+      {control}
       {error ? (
-        <p className="text-xs font-medium text-rose-600" role="alert">
+        <p id={errorId} className="text-xs font-medium text-rose-600" role="alert">
           {error}
         </p>
       ) : hint ? (
-        <p className="text-xs text-slate-500">{hint}</p>
+        <p id={hintId} className="text-xs text-slate-500">
+          {hint}
+        </p>
       ) : null}
     </div>
   );
@@ -104,16 +123,22 @@ export function Switch({
 
 /** Ikon info dengan tooltip ringan (CSS, tanpa dependensi tambahan). */
 export function Hint({ text, className }: { text: string; className?: string }) {
+  const tooltipId = React.useId();
   return (
     <span className={cn("group/hint relative inline-flex", className)}>
-      <span
-        tabIndex={0}
-        aria-label={text}
+      <button
+        type="button"
+        aria-label="Penjelasan"
+        aria-describedby={tooltipId}
         className="inline-flex size-4.5 cursor-help items-center justify-center rounded-full border border-slate-300 text-[10px] font-semibold text-slate-500 transition hover:border-slate-400 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
       >
         i
-      </span>
-      <span className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 w-64 -translate-x-1/2 rounded-xl bg-slate-900 px-3 py-2 text-xs leading-relaxed text-slate-100 opacity-0 shadow-lg transition-opacity group-hover/hint:opacity-100 group-focus-within/hint:opacity-100">
+      </button>
+      <span
+        id={tooltipId}
+        role="tooltip"
+        className="pointer-events-none absolute right-0 bottom-full z-30 mb-2 w-64 max-w-[calc(100vw-2rem)] rounded-xl bg-slate-900 px-3 py-2 text-xs leading-relaxed text-slate-100 opacity-0 shadow-lg transition-opacity group-hover/hint:opacity-100 group-focus-within/hint:opacity-100 sm:left-1/2 sm:right-auto sm:-translate-x-1/2"
+      >
         {text}
       </span>
     </span>

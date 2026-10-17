@@ -20,7 +20,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="id">
-      <body className="bg-slate-50 text-slate-900 antialiased">
+      <body className="min-h-dvh bg-slate-50 text-slate-900 antialiased" suppressHydrationWarning>
         {/* Toast dipasang di root supaya bisa dipakai semua halaman (dashboard, koneksi, dsb.). */}
         <ToastProvider>{children}</ToastProvider>
       </body>

@@ -489,9 +489,9 @@ curl -X POST -b cookie.txt "${API_BASE}/devices/<device-id>/connect"
             ))}
           </ol>
           <Alert tone="info" title="URL dasar" icon={<Terminal className="size-4" />}>
-            Semua endpoint dashboard berada di bawah <code className="font-mono text-xs">{API_BASE}</code>. Permintaan
-            dari dashboard mengirim cookie sesi (<code className="font-mono text-xs">credentials: include</code>);
-            integrasi server memakai header <code className="font-mono text-xs">Authorization: Bearer &lt;api_key&gt;</code>.
+            Semua endpoint dashboard berada di bawah <code className="break-all font-mono text-xs">{API_BASE}</code>. Permintaan
+            dari dashboard mengirim cookie sesi (<code className="break-all font-mono text-xs">credentials: include</code>);
+            integrasi server memakai header <code className="break-all font-mono text-xs">Authorization: Bearer &lt;api_key&gt;</code>.
           </Alert>
         </Section>
 
@@ -505,15 +505,15 @@ curl -X POST -b cookie.txt "${API_BASE}/devices/<device-id>/connect"
             <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 text-sm">
               <p className="font-medium text-slate-800">Cookie sesi</p>
               <p className="mt-1 leading-relaxed text-slate-600">
-                Diterbitkan saat masuk/daftar sebagai cookie <code className="font-mono text-xs">session</code> yang
+                Diterbitkan saat masuk/daftar sebagai cookie <code className="break-all font-mono text-xs">session</code> yang
                 HttpOnly. Dipakai halaman dashboard dan endpoint perangkat serta admin.
               </p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 text-sm">
               <p className="font-medium text-slate-800">API key</p>
               <p className="mt-1 leading-relaxed text-slate-600">
-                Dibuat lewat <code className="font-mono text-xs">POST /auth/api-key</code> (ditampilkan sekali, hanya
-                hash SHA-256 yang disimpan). Berlaku untuk <code className="font-mono text-xs">/messages</code>.
+                Dibuat lewat <code className="break-all font-mono text-xs">POST /auth/api-key</code> (ditampilkan sekali, hanya
+                hash SHA-256 yang disimpan). Berlaku untuk <code className="break-all font-mono text-xs">/messages</code>.
               </p>
             </div>
           </div>
@@ -586,7 +586,7 @@ curl -X POST -b cookie.txt "${API_BASE}/devices/<device-id>/connect"
           </div>
           <Alert tone="info" title="Status awal selalu Processing" icon={<LifeBuoy className="size-4" />}>
             Respons pengiriman berarti permintaan sudah diterima gateway, belum tentu sudah sampai ke HP penerima.
-            Pantau perubahan status melalui riwayat pesan (<code className="font-mono text-xs">GET /messages</code>).
+            Pantau perubahan status melalui riwayat pesan (<code className="break-all font-mono text-xs">GET /messages</code>).
           </Alert>
         </Section>
 
@@ -626,8 +626,8 @@ curl -X POST -b cookie.txt "${API_BASE}/devices/<device-id>/connect"
             </table>
           </div>
           <p className="text-xs leading-relaxed text-slate-500">
-            Nilai status lain yang mungkin muncul dari provider (mis. <code className="font-mono">Expired</code>,{" "}
-            <code className="font-mono">Invalid</code>, <code className="font-mono">Failed</code>) ditampilkan apa adanya
+            Nilai status lain yang mungkin muncul dari provider (mis. <code className="break-all font-mono">Expired</code>,{" "}
+            <code className="break-all font-mono">Invalid</code>, <code className="break-all font-mono">Failed</code>) ditampilkan apa adanya
             dengan label Indonesia melalui tabel terjemahan dashboard.
           </p>
         </Section>
@@ -644,7 +644,7 @@ curl -X POST -b cookie.txt "${API_BASE}/devices/<device-id>/connect"
             ))}
           </div>
           <p className="text-sm leading-relaxed text-slate-600">
-            Panel admin tersedia di Beranda untuk akun dengan peran <code className="font-mono text-xs">admin</code>.
+            Panel admin tersedia di Beranda untuk akun dengan peran <code className="break-all font-mono text-xs">admin</code>.
             Akun nonaktif tidak bisa masuk, tetapi riwayat pesannya tetap tersimpan.
           </p>
         </Section>
@@ -718,7 +718,7 @@ curl -X POST -b cookie.txt "${API_BASE}/devices/<device-id>/connect"
             </table>
           </div>
           <p className="text-xs leading-relaxed text-slate-500">
-            Kegagalan per pesan juga tampil sebagai status <code className="font-mono">Failed</code> pada riwayat,
+            Kegagalan per pesan juga tampil sebagai status <code className="break-all font-mono">Failed</code> pada riwayat,
             tanpa membatalkan pesan lain dalam permintaan yang sama.
           </p>
         </Section>
@@ -733,10 +733,10 @@ curl -X POST -b cookie.txt "${API_BASE}/devices/<device-id>/connect"
             <div className="rounded-xl border border-slate-200 p-4">
               <p className="font-medium text-slate-800">Kredensial sesi Baileys bertahan di volume</p>
               <p className="mt-1 leading-relaxed">
-                Sesi WhatsApp tersimpan pada volume <code className="font-mono text-xs">baileys_auth</code>. Setelah
+                Sesi WhatsApp tersimpan pada volume <code className="break-all font-mono text-xs">baileys_auth</code>. Setelah
                 service gateway dijalankan ulang, perangkat bisa terbaca <em>Disconnected</em> sampai{" "}
-                <code className="font-mono text-xs">POST /devices/&#123;id&#125;/connect</code> dipanggil lagi — tanpa
-                perlu memindai QR ulang. Jangan menjalankan <code className="font-mono text-xs">docker compose down -v</code>{" "}
+                <code className="break-all font-mono text-xs">POST /devices/&#123;id&#125;/connect</code> dipanggil lagi — tanpa
+                perlu memindai QR ulang. Jangan menjalankan <code className="break-all font-mono text-xs">docker compose down -v</code>{" "}
                 karena menghapus sesi dan seluruh database.
               </p>
             </div>
@@ -760,21 +760,27 @@ curl -X POST -b cookie.txt "${API_BASE}/devices/<device-id>/connect"
             <div className="rounded-xl border border-slate-200 p-4">
               <p className="font-medium text-slate-800">Pengamanan kredensial</p>
               <p className="mt-1 leading-relaxed">
-                Access token Meta dienkripsi AES-256-GCM dengan kunci <code className="font-mono text-xs">DEVICE_CREDENTIALS_KEY</code>{" "}
+                Access token Meta dienkripsi AES-256-GCM dengan kunci <code className="break-all font-mono text-xs">DEVICE_CREDENTIALS_KEY</code>{" "}
                 dan tidak pernah dikirim ke frontend. Service gateway Baileys hanya berada di jaringan internal Docker
-                dan dilindungi <code className="font-mono text-xs">GATEWAY_TOKEN</code>. Semua kredensial ada di{" "}
-                <code className="font-mono text-xs">.env</code> — cadangkan file itu bila ingin memulihkan sesi dan
+                dan dilindungi <code className="break-all font-mono text-xs">GATEWAY_TOKEN</code>. Semua kredensial ada di{" "}
+                <code className="break-all font-mono text-xs">.env</code> — cadangkan file itu bila ingin memulihkan sesi dan
                 perangkat.
               </p>
             </div>
             <div className="rounded-xl border border-slate-200 p-4">
               <p className="font-medium text-slate-800">Baris pesan tanpa perangkat</p>
               <p className="mt-1 leading-relaxed">
-                Pesan lama dengan <code className="font-mono text-xs">device_id</code> kosong adalah sisa pengiriman
+                Pesan lama dengan <code className="break-all font-mono text-xs">device_id</code> kosong adalah sisa pengiriman
                 sebelum ada perangkat tersambung. Baris seperti ini hanya bisa dilihat, tidak dapat dikirim ulang;
                 kirim ulang sebagai pesan baru lewat perangkat yang sudah terhubung.
               </p>
             </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Endpoint internal</p>
+            {internalEndpoints.map((endpoint) => (
+              <EndpointRow key={`${endpoint.method}${endpoint.path}`} endpoint={endpoint} />
+            ))}
           </div>
           <CodeBlock label="Pemeriksaan kesehatan API" code={healthSnippet} onCopy={copy} />
         </Section>
@@ -818,8 +824,8 @@ curl -X POST -b cookie.txt "${API_BASE}/devices/<device-id>/connect"
             ))}
           </dl>
           <Alert tone="info" title="Dokumentasi teknis lengkap" icon={<ExternalLink className="size-4" />}>
-            Referensi instalasi, variabel lingkungan, dan catatan audit ada di berkas <code className="font-mono text-xs">README.md</code>{" "}
-            dan <code className="font-mono text-xs">AUDIT.md</code> pada repositori proyek.
+            Referensi instalasi, variabel lingkungan, dan catatan audit ada di berkas <code className="break-all font-mono text-xs">README.md</code>{" "}
+            dan <code className="break-all font-mono text-xs">AUDIT.md</code> pada repositori proyek.
           </Alert>
         </Section>
 

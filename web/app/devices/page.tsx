@@ -3,10 +3,31 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Link2, Plus, RefreshCw, Smartphone, Trash2 } from "lucide-react";
-import { api, ApiRequestError } from "@/lib/api";
+import {
+  Link2,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Smartphone,
+  Trash2,
+  TriangleAlert,
+  Unplug,
+} from "lucide-react";
+
+import { AppShell } from "@/components/app-shell";
+import { ConnectionBadge, ProviderBadge } from "@/components/status-badge";
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Field, Select } from "@/components/ui/controls";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/toast";
+import { api, ApiRequestError, type Account } from "@/lib/api";
+import { providerMeta } from "@/lib/status";
+import { cn } from "@/lib/utils";
 
 type Provider = "meta_cloud" | "baileys";
 type Device = {
@@ -35,45 +56,102 @@ type PairingStatus = {
  */
 const NEEDS_QR = ["disconnected", "logged_out", "error", "needs_repair"];
 
+/** Aksi destruktif yang menunggu konfirmasi di dialog (bukan `window.confirm`). */
+type PendingAction = { kind: "relink" | "remove"; device: Device } | null;
+
 export default function DevicesPage() {
   const router = useRouter();
+  const toast = useToast();
+  const [account, setAccount] = useState<Account | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
+  const [loading, setLoading] = useState(true);
   const [deviceName, setDeviceName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [provider, setProvider] = useState<Provider>("meta_cloud");
   const [phoneNumberId, setPhoneNumberId] = useState("");
   const [accessToken, setAccessToken] = useState("");
   const [pairing, setPairing] = useState<Record<string, PairingStatus>>({});
-  /** Device yang sedang menjalani penautan ulang manual (kartunya menampilkan "Menyiapkan QR baru…"). */
+  /** Device yang sedang menjalani penautan ulang manual (kartunya menampilkan "Menyiapkan QR baru..."). */
   const [relinking, setRelinking] = useState<Record<string, boolean>>({});
   const [error, setError] = useState("");
+  /** Galat polling status yang bersifat sementara — ditampilkan terpisah agar tidak menutupi galat formulir. */
+  const [pollError, setPollError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<PendingAction>(null);
+  const [pendingBusy, setPendingBusy] = useState(false);
 
   const loadDevices = useCallback(async () => {
     const result = await api<Device[]>("/devices");
     setDevices(result);
   }, []);
 
+  const handleFailure = useCallback(
+    (failure: unknown, fallback: string) => {
+      if (failure instanceof ApiRequestError && failure.status === 401) {
+        router.replace("/login");
+        return;
+      }
+      setError(failure instanceof Error ? failure.message : fallback);
+    },
+    [router],
+  );
+
+  const refresh = useCallback(async () => {
+    try {
+      await loadDevices();
+      setError("");
+    } catch (failure) {
+      handleFailure(failure, "Daftar device gagal dimuat.");
+    }
+  }, [handleFailure, loadDevices]);
+
   useEffect(() => {
-    void loadDevices().catch((failure: unknown) => {
-      if (failure instanceof ApiRequestError && failure.status === 401) router.replace("/login");
-      else setError(failure instanceof Error ? failure.message : "Daftar device gagal dimuat.");
-    });
-  }, [loadDevices, router]);
+    void (async () => {
+      try {
+        const me = await api<Account>("/auth/me");
+        setAccount(me);
+      } catch {
+        /* Sesi ditangani oleh pemuatan device di bawah. */
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    void (async () => {
+      await refresh();
+      setLoading(false);
+    })();
+  }, [refresh]);
 
   useEffect(() => {
     const polling = devices.filter((device) => device.provider === "baileys");
     if (!polling.length) return;
-    const timer = window.setInterval(() => {
-      for (const device of polling) {
-        void api<PairingStatus>(`/devices/${device.id}/status`)
-          .then((status) => setPairing((current) => ({ ...current, [device.id]: status })))
-          .catch((failure: unknown) => {
-            setError(failure instanceof Error ? failure.message : "Status koneksi gagal diperbarui.");
-          });
+
+    let cancelled = false;
+    async function poll() {
+      try {
+        const results = await Promise.all(
+          polling.map(async (device) => [device.id, await api<PairingStatus>(`/devices/${device.id}/status`)] as const),
+        );
+        if (cancelled) return;
+        setPairing((current) => {
+          const next = { ...current };
+          for (const [id, status] of results) next[id] = status;
+          return next;
+        });
+        setPollError("");
+      } catch (failure) {
+        if (cancelled) return;
+        setPollError(failure instanceof Error ? failure.message : "Status koneksi gagal diperbarui.");
       }
-    }, 3000);
-    return () => window.clearInterval(timer);
+    }
+
+    void poll();
+    const timer = window.setInterval(() => void poll(), 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, [devices]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -100,9 +178,12 @@ export default function DevicesPage() {
       if (provider === "baileys") {
         const status = await api<PairingStatus>(`/devices/${device.id}/status`);
         setPairing((current) => ({ ...current, [device.id]: status }));
+        toast.info("Koneksi dibuat", "Pindai kode QR yang muncul untuk menautkan perangkat.");
+      } else {
+        toast.success("Koneksi ditambahkan", `“${device.device_name}” siap dipakai.`);
       }
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Gagal menambahkan koneksi.");
+      handleFailure(failure, "Gagal menambahkan koneksi.");
     } finally {
       setBusy(false);
     }
@@ -114,8 +195,9 @@ export default function DevicesPage() {
       const status = await api<PairingStatus>(`/devices/${device.id}/connect`, { method: "POST" });
       setPairing((current) => ({ ...current, [device.id]: status }));
       await loadDevices();
+      toast.info("Menyiapkan QR", "Pindai kode QR dari WhatsApp → Perangkat tertaut.");
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Koneksi Baileys gagal dimulai.");
+      handleFailure(failure, "Koneksi Baileys gagal dimulai.");
     }
   }
 
@@ -125,7 +207,6 @@ export default function DevicesPage() {
    * supaya pengguna tidak terjebak menunggu status `connecting`.
    */
   async function relink(device: Device) {
-    if (!window.confirm(`Tautkan ulang "${device.device_name}"? Sesi lama dihapus dan QR baru dibuat.`)) return;
     setError("");
     setRelinking((current) => ({ ...current, [device.id]: true }));
     try {
@@ -140,8 +221,9 @@ export default function DevicesPage() {
         if (status.qr_code || status.status === "connected" || status.status === "error") break;
       }
       await loadDevices();
+      toast.success("QR baru siap", "Pindai kode QR untuk menautkan kembali perangkat.");
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Penautan ulang gagal dijalankan.");
+      handleFailure(failure, "Penautan ulang gagal dijalankan.");
     } finally {
       setRelinking((current) => {
         const next = { ...current };
@@ -152,7 +234,6 @@ export default function DevicesPage() {
   }
 
   async function remove(device: Device) {
-    if (!window.confirm(`Hapus koneksi "${device.device_name}"?`)) return;
     setError("");
     try {
       await api<void>(`/devices/${device.id}`, { method: "DELETE" });
@@ -162,109 +243,363 @@ export default function DevicesPage() {
         delete next[device.id];
         return next;
       });
+      toast.success("Koneksi dihapus", `“${device.device_name}” tidak lagi tersambung.`);
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Koneksi gagal dihapus.");
+      handleFailure(failure, "Koneksi gagal dihapus.");
+    }
+  }
+
+  async function runPending() {
+    if (!pending) return;
+    const { kind, device } = pending;
+    setPending(null);
+    setPendingBusy(true);
+    try {
+      if (kind === "relink") await relink(device);
+      else await remove(device);
+    } finally {
+      setPendingBusy(false);
     }
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f8fa] px-6 py-12">
-      <div className="mx-auto max-w-3xl space-y-6">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" aria-label="Kembali ke dashboard" onClick={() => router.push("/dashboard")}><ArrowLeft size={18} /></Button>
-          <div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-700 text-white"><Smartphone size={20} /></div>
-          <div>
-            <h1 className="text-xl font-semibold text-slate-900">Koneksi WhatsApp</h1>
-            <p className="text-xs text-slate-500">Pilih provider untuk setiap device. Koneksi provider tidak dicampur.</p>
+    <AppShell email={account?.email ?? "memuat…"} role={account?.role ?? "user"}>
+      <div className="space-y-6">
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-sm">
+              <Smartphone className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <h1 className="text-xl font-semibold tracking-tight text-slate-900">Koneksi WhatsApp</h1>
+              <p className="text-sm text-slate-500">
+                Pilih provider untuk setiap device. Koneksi provider tidak dicampur.
+              </p>
+            </div>
           </div>
-        </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void refresh()}
+            disabled={loading}
+            className="self-start"
+          >
+            <RefreshCw className={cn("size-4", loading && "animate-spin")} />
+            Muat ulang
+          </Button>
+        </header>
 
-        {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p>}
+        {error ? (
+          <Alert tone="danger" title="Terjadi kesalahan" icon={<TriangleAlert className="size-4" />}>
+            {error}
+          </Alert>
+        ) : null}
 
-        <form onSubmit={submit} className="grid gap-5 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm md:grid-cols-2">
-          <label htmlFor="device_name" className="block space-y-2 text-sm font-medium text-slate-700">Nama koneksi
-            <Input id="device_name" value={deviceName} onChange={(event) => setDeviceName(event.target.value)} placeholder="Contoh: WhatsApp Toko" required maxLength={255} />
-          </label>
-          <label htmlFor="phone_number" className="block space-y-2 text-sm font-medium text-slate-700">Nomor WhatsApp bisnis
-            <Input id="phone_number" value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="628123456789" required maxLength={32} />
-          </label>
-          <label htmlFor="provider" className="block space-y-2 text-sm font-medium text-slate-700 md:col-span-2">Provider
-            <select id="provider" value={provider} onChange={(event) => setProvider(event.target.value as Provider)} className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10">
+        <form
+          onSubmit={submit}
+          className="grid gap-5 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6 md:grid-cols-2"
+        >
+          <Field label="Nama koneksi" htmlFor="device_name" hint="Nama ini hanya untuk identifikasi di dashboard.">
+            <Input
+              id="device_name"
+              name="device_name"
+              value={deviceName}
+              onChange={(event) => setDeviceName(event.target.value)}
+              placeholder="Contoh: WhatsApp Toko"
+              autoComplete="off"
+              required
+              maxLength={255}
+            />
+          </Field>
+          <Field label="Nomor WhatsApp bisnis" htmlFor="phone_number" hint="Format internasional tanpa tanda +, contoh 628123456789.">
+            <Input
+              id="phone_number"
+              name="phone_number"
+              value={phoneNumber}
+              onChange={(event) => setPhoneNumber(event.target.value)}
+              placeholder="628123456789"
+              inputMode="tel"
+              autoComplete="off"
+              required
+              maxLength={32}
+            />
+          </Field>
+          <Field label="Provider" htmlFor="provider" className="md:col-span-2" hint={providerMeta(provider).description}>
+            <Select
+              id="provider"
+              name="provider"
+              value={provider}
+              onChange={(event) => setProvider(event.target.value as Provider)}
+            >
               <option value="meta_cloud">Meta WhatsApp Cloud API (resmi)</option>
               <option value="baileys">Baileys QR (eksperimental, nonresmi)</option>
-            </select>
-          </label>
+            </Select>
+          </Field>
           {provider === "meta_cloud" ? (
             <>
-              <label htmlFor="meta_phone_number_id" className="block space-y-2 text-sm font-medium text-slate-700 md:col-span-2">Meta Phone Number ID
-                <Input id="meta_phone_number_id" value={phoneNumberId} onChange={(event) => setPhoneNumberId(event.target.value)} placeholder="ID nomor dari WhatsApp Manager" required inputMode="numeric" />
-              </label>
-              <label htmlFor="meta_access_token" className="block space-y-2 text-sm font-medium text-slate-700 md:col-span-2">Meta access token
-                <Input id="meta_access_token" type="password" autoComplete="new-password" value={accessToken} onChange={(event) => setAccessToken(event.target.value)} placeholder="Token akses WhatsApp Business Platform" required minLength={20} maxLength={4096} />
-                <span className="block text-xs font-normal text-slate-500">Dikirim langsung ke backend dan dienkripsi saat disimpan. Tidak ditampilkan kembali.</span>
-              </label>
+              <Field label="Meta Phone Number ID" htmlFor="meta_phone_number_id" className="md:col-span-2" hint="Diambil dari WhatsApp Manager → Nomor telepon.">
+                <Input
+                  id="meta_phone_number_id"
+                  name="meta_phone_number_id"
+                  value={phoneNumberId}
+                  onChange={(event) => setPhoneNumberId(event.target.value)}
+                  placeholder="ID nomor dari WhatsApp Manager"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  required
+                />
+              </Field>
+              <Field
+                label="Meta access token"
+                htmlFor="meta_access_token"
+                className="md:col-span-2"
+                hint="Dikirim langsung ke backend dan dienkripsi saat disimpan. Tidak ditampilkan kembali."
+              >
+                <Input
+                  id="meta_access_token"
+                  name="meta_access_token"
+                  type="password"
+                  autoComplete="new-password"
+                  value={accessToken}
+                  onChange={(event) => setAccessToken(event.target.value)}
+                  placeholder="Token akses WhatsApp Business Platform"
+                  required
+                  minLength={20}
+                  maxLength={4096}
+                />
+              </Field>
             </>
           ) : (
-            <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900 md:col-span-2">
-              Baileys berkomunikasi memakai protokol WhatsApp Web nonresmi. Ini terpisah dari Meta Cloud API dan dapat berisiko bagi stabilitas/kepatuhan akun. Gunakan hanya untuk eksperimen, bukan nomor Meta yang sama.
-            </p>
+            <Alert
+              tone="warning"
+              className="md:col-span-2"
+              icon={<TriangleAlert className="size-4" />}
+              title="Provider nonresmi"
+            >
+              Baileys berkomunikasi memakai protokol WhatsApp Web nonresmi. Ini terpisah dari Meta Cloud API dan
+              dapat berisiko bagi stabilitas/kepatuhan akun. Gunakan hanya untuk eksperimen, bukan nomor Meta yang sama.
+            </Alert>
           )}
-          <Button type="submit" className="md:col-span-2" disabled={busy}><Plus size={15} />{busy ? "Menyimpan..." : "Tambah koneksi"}</Button>
+          <Button type="submit" className="w-full md:col-span-2" disabled={busy}>
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+            {busy ? "Menyimpan…" : "Tambah koneksi"}
+          </Button>
         </form>
 
-        <section className="space-y-3">
-          <h2 className="text-base font-semibold text-slate-900">Koneksi Anda</h2>
-          {devices.length === 0 ? <p className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">Belum ada koneksi WhatsApp.</p> : devices.map((device) => {
-            const liveStatus = pairing[device.id];
-            const isRelinking = Boolean(relinking[device.id]);
-            const statusText = isRelinking ? "menyiapkan_qr" : (liveStatus?.status ?? device.connection_status);
-            const needsQr = device.provider === "baileys" && NEEDS_QR.includes(statusText);
-            const healthy = statusText === "connected";
-            const tone = healthy
-              ? "bg-emerald-50 text-emerald-700"
-              : needsQr || isRelinking
-                ? "bg-amber-50 text-amber-800"
-                : "bg-slate-100 text-slate-600";
-            return (
-              <article key={device.id} className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 sm:grid-cols-[1fr_auto]">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-semibold text-slate-900">{device.device_name}</h3>
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{device.provider === "meta_cloud" ? "Meta Cloud API" : "Baileys · eksperimental"}</span>
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${tone}`}>{statusText}</span>
-                  </div>
-                  <p className="mt-1 text-sm text-slate-500">{device.phone_number}</p>
-                  {needsQr && (
-                    <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
-                      Sesi ini terputus dan tidak dapat dipulihkan otomatis. Tekan <strong>Tautkan ulang</strong> untuk menampilkan QR baru, lalu pindai dari WhatsApp → Perangkat tertaut.
-                    </p>
-                  )}
-                  {isRelinking && (
-                    <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
-                      Kredensial lama dihapus, menyiapkan QR baru… QR biasanya muncul beberapa detik lagi; biarkan halaman ini terbuka.
-                    </p>
-                  )}
-                  {(liveStatus?.last_close_reason ?? liveStatus?.last_error) && (
-                    <p className="mt-2 text-xs text-slate-500">
-                      Diagnostik: {liveStatus?.last_close_reason ? `putus terakhir=${liveStatus.last_close_reason}` : ""}
-                      {liveStatus?.last_error ? ` · ${liveStatus.last_error}` : ""}
-                      {liveStatus?.auto_repairs ? ` · penautan ulang otomatis=${liveStatus.auto_repairs}` : ""}
-                      {liveStatus?.cached_messages != null ? ` · cache pesan=${liveStatus.cached_messages}` : ""}
-                    </p>
-                  )}
-                  {device.provider === "baileys" && liveStatus?.qr_code && <div className="mt-4 w-fit rounded-xl border border-slate-200 bg-white p-3"><Image src={liveStatus.qr_code} alt={`QR pairing ${device.device_name}`} width={220} height={220} unoptimized /></div>}
-                  {device.provider === "meta_cloud" && <p className="mt-2 text-xs text-slate-500">Kredensial tersimpan. Pengiriman aktual tetap bergantung pada validitas token dan konfigurasi Meta.</p>}
-                </div>
-                <div className="flex items-start gap-2">
-                  {device.provider === "baileys" && (!needsQr || isRelinking) && <Button variant="secondary" size="sm" disabled={isRelinking} onClick={() => void reconnect(device)}><Link2 size={14} /> QR</Button>}
-                  {device.provider === "baileys" && needsQr && !isRelinking && <Button variant="secondary" size="sm" onClick={() => void relink(device)}><RefreshCw size={14} /> Tautkan ulang</Button>}
-                  <Button variant="danger" size="icon" aria-label={`Hapus ${device.device_name}`} onClick={() => void remove(device)}><Trash2 size={15} /></Button>
-                </div>
-              </article>
-            );
-          })}
+        <section className="space-y-3" aria-labelledby="daftar-koneksi">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 id="daftar-koneksi" className="text-base font-semibold tracking-tight text-slate-900">
+              Koneksi Anda
+            </h2>
+            {!loading && devices.length > 0 ? (
+              <span className="text-xs text-slate-500">{devices.length} koneksi</span>
+            ) : null}
+          </div>
+
+          {pollError ? (
+            <Alert tone="warning" icon={<TriangleAlert className="size-4" />}>
+              {pollError}
+            </Alert>
+          ) : null}
+
+          <div role="status" aria-live="polite" aria-busy={loading || undefined} className="space-y-3">
+            {loading ? (
+              <>
+                <span className="sr-only">Memuat daftar koneksi WhatsApp…</span>
+                <DeviceListSkeleton />
+              </>
+            ) : devices.length === 0 ? (
+              <EmptyState
+                icon={<Unplug className="size-5" />}
+                title="Belum ada koneksi WhatsApp"
+                description="Tambahkan koneksi di formulir atas: pilih Meta Cloud API untuk jalur resmi, atau Baileys untuk menautkan lewat QR."
+              />
+            ) : (
+              devices.map((device) => {
+                const liveStatus = pairing[device.id];
+                const isRelinking = Boolean(relinking[device.id]);
+                const statusText = liveStatus?.status ?? device.connection_status;
+                const needsQr = device.provider === "baileys" && NEEDS_QR.includes(statusText);
+                const diagnostics = [
+                  liveStatus?.last_close_reason
+                    ? { label: "Putus terakhir", value: liveStatus.last_close_reason }
+                    : null,
+                  liveStatus?.last_error ? { label: "Galat terakhir", value: liveStatus.last_error } : null,
+                  liveStatus?.auto_repairs ? { label: "Perbaikan otomatis", value: String(liveStatus.auto_repairs) } : null,
+                  liveStatus?.cached_messages != null
+                    ? { label: "Cache pesan", value: String(liveStatus.cached_messages) }
+                    : null,
+                ].filter((row): row is { label: string; value: string } => row !== null);
+
+                return (
+                  <article
+                    key={device.id}
+                    className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-colors hover:border-slate-300"
+                  >
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-sm font-semibold text-slate-900 sm:text-base">{device.device_name}</h3>
+                          <ProviderBadge provider={device.provider} />
+                          <ConnectionBadge status={statusText} />
+                          {isRelinking ? (
+                            <Badge tone="progress" dot pulse>
+                              Menyiapkan QR baru…
+                            </Badge>
+                          ) : needsQr ? (
+                            <Badge tone="warning" dot>
+                              Perlu QR baru
+                            </Badge>
+                          ) : null}
+                        </div>
+
+                        <p className="font-mono text-xs text-slate-500 sm:text-sm">{device.phone_number}</p>
+
+                        {needsQr && !isRelinking ? (
+                          <Alert tone="warning" className="mt-1" icon={<TriangleAlert className="size-4" />}>
+                            Sesi ini terputus dan tidak dapat dipulihkan otomatis. Tekan <strong>Tautkan ulang</strong>{" "}
+                            untuk menampilkan QR baru, lalu pindai dari WhatsApp → Perangkat tertaut.
+                          </Alert>
+                        ) : null}
+
+                        {isRelinking ? (
+                          <p
+                            aria-live="polite"
+                            className="mt-1 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900"
+                          >
+                            <Loader2 className="mt-0.5 size-3.5 shrink-0 animate-spin" />
+                            <span>
+                              Kredensial lama dihapus, menyiapkan QR baru… QR biasanya muncul beberapa detik lagi;
+                              biarkan halaman ini terbuka.
+                            </span>
+                          </p>
+                        ) : null}
+
+                        {diagnostics.length > 0 ? (
+                          <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl bg-slate-50 px-3 py-2 text-xs sm:grid-cols-4">
+                            {diagnostics.map((row) => (
+                              <div key={row.label} className="min-w-0">
+                                <dt className="text-slate-500">{row.label}</dt>
+                                <dd className="truncate font-medium text-slate-700" title={row.value}>
+                                  {row.value}
+                                </dd>
+                              </div>
+                            ))}
+                          </dl>
+                        ) : null}
+
+                        {device.provider === "baileys" && liveStatus?.qr_code ? (
+                          <div className="mt-4 w-fit max-w-full rounded-2xl border border-slate-200 bg-white p-3">
+                            <Image
+                              src={liveStatus.qr_code}
+                              alt={`Kode QR untuk menautkan ${device.device_name}`}
+                              width={220}
+                              height={220}
+                              unoptimized
+                              className="h-auto w-[220px] max-w-full"
+                            />
+                            <p className="mt-2 text-center text-xs text-slate-500">WhatsApp → Perangkat tertaut</p>
+                          </div>
+                        ) : null}
+
+                        {device.provider === "meta_cloud" ? (
+                          <p className="text-xs text-slate-500">
+                            Kredensial tersimpan. Pengiriman aktual tetap bergantung pada validitas token dan
+                            konfigurasi Meta.
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:items-end">
+                        {device.provider === "baileys" && (!needsQr || isRelinking) ? (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={isRelinking}
+                            onClick={() => void reconnect(device)}
+                            className="flex-1 sm:flex-none"
+                          >
+                            {isRelinking ? <Loader2 className="size-4 animate-spin" /> : <Link2 className="size-4" />}
+                            Tampilkan QR
+                          </Button>
+                        ) : null}
+                        {device.provider === "baileys" && needsQr && !isRelinking ? (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setPending({ kind: "relink", device })}
+                            className="flex-1 sm:flex-none"
+                          >
+                            <RefreshCw className="size-4" />
+                            Tautkan ulang
+                          </Button>
+                        ) : null}
+                        <Button
+                          variant="danger"
+                          size="icon"
+                          aria-label={`Hapus koneksi ${device.device_name}`}
+                          title={`Hapus ${device.device_name}`}
+                          onClick={() => setPending({ kind: "remove", device })}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })
+            )}
+          </div>
         </section>
       </div>
-    </main>
+
+      <ConfirmDialog
+        open={pending !== null}
+        title={
+          pending?.kind === "remove"
+            ? `Hapus koneksi “${pending.device.device_name}”?`
+            : `Tautkan ulang “${pending?.device.device_name}”?`
+        }
+        description={
+          pending?.kind === "remove"
+            ? "Kredensial perangkat dihapus dari gateway. Pesan yang sudah terkirim tidak terpengaruh."
+            : "Sesi lama dihapus dan QR baru dibuat. Perangkat lama akan berhenti tersambung sampai QR baru dipindai."
+        }
+        confirmLabel={pending?.kind === "remove" ? "Hapus koneksi" : "Tautkan ulang"}
+        tone={pending?.kind === "remove" ? "danger" : "brand"}
+        busy={pendingBusy}
+        onCancel={() => {
+          if (!pendingBusy) setPending(null);
+        }}
+        onConfirm={() => void runPending()}
+      />
+    </AppShell>
+  );
+}
+
+/** Kerangka kartu koneksi supaya daftar tidak berkedip saat data pertama dimuat. */
+function DeviceListSkeleton() {
+  return (
+    <>
+      {[0, 1].map((index) => (
+        <div key={index} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex-1 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-6 w-24 rounded-full" />
+                <Skeleton className="h-6 w-28 rounded-full" />
+              </div>
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-12 w-full rounded-xl" />
+            </div>
+            <div className="flex gap-2">
+              <Skeleton className="h-9 w-32 rounded-xl" />
+              <Skeleton className="size-9 rounded-xl" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </>
   );
 }
