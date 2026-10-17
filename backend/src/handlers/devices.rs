@@ -170,9 +170,51 @@ pub async fn device_status(
             status: device.connection_status,
             qr_code: None,
             cached_messages: None,
+            paired: None,
+            auto_repairs: None,
+            last_close_reason: None,
+            last_error: None,
+            decrypt_failures: None,
+            getmessage_misses: None,
         }));
     }
     let session = providers::baileys_session_status(&state, &id).await?;
+    if session.status != device.connection_status {
+        if session.status == "connected" {
+            tracing::info!(device_id = %id, "Baileys device is connected");
+        } else {
+            tracing::warn!(
+                device_id = %id,
+                previous = %device.connection_status,
+                current = %session.status,
+                reason = session.last_close_reason.as_deref().unwrap_or("-"),
+                detail = session.last_error.as_deref().unwrap_or("-"),
+                paired = session.paired.unwrap_or(false),
+                "Baileys device connection changed"
+            );
+        }
+    }
+    devices::set_status(&state.pool, &id, &user.id, &session.status).await?;
+    Ok(Json(session))
+}
+
+/// Menautkan ulang perangkat Baileys: kredensial lokal dibuang dan QR baru dibuat.
+///
+/// Dipakai halaman Perangkat ketika status `logged_out`/`error`/`disconnected`
+/// sehingga pengguna dapat memindai QR terbaru.
+pub async fn relink_device(
+    State(state): State<AppState>,
+    Extension(user): Extension<User>,
+    Path(id): Path<String>,
+) -> Result<Json<providers::SessionStatus>, ApiError> {
+    let device = owned_device(&state, &user.id, &id).await?;
+    if device.provider != "baileys" {
+        return Err(ApiError::BadRequest(
+            "only Baileys devices use QR pairing".into(),
+        ));
+    }
+    tracing::warn!(device_id = %id, user_id = %user.id, "Relinking Baileys device (fresh QR)");
+    let session = providers::restart_baileys_session(&state, &id).await?;
     devices::set_status(&state.pool, &id, &user.id, &session.status).await?;
     Ok(Json(session))
 }

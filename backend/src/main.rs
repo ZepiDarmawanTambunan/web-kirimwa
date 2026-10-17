@@ -85,6 +85,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(handlers::devices::device_status),
         )
         .route(
+            "/devices/{id}/reconnect",
+            post(handlers::devices::relink_device),
+        )
+        .route(
             "/admin/users/{id}",
             axum::routing::patch(handlers::admin::set_user_status),
         )

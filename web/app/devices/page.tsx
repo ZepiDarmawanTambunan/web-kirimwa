@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Link2, Plus, Smartphone, Trash2 } from "lucide-react";
+import { ArrowLeft, Link2, Plus, RefreshCw, Smartphone, Trash2 } from "lucide-react";
 import { api, ApiRequestError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,23 @@ type Device = {
   is_active: boolean;
   connection_status: string;
 };
-type PairingStatus = { status: string; qr_code: string | null };
+type PairingStatus = {
+  status: string;
+  qr_code: string | null;
+  cached_messages?: number | null;
+  paired?: boolean | null;
+  auto_repairs?: number | null;
+  last_close_reason?: string | null;
+  last_error?: string | null;
+  decrypt_failures?: number | null;
+  getmessage_misses?: number | null;
+};
+
+/**
+ * Status yang berarti perangkat perlu dipindai ulang: kredensialnya sudah
+ * ditolak WhatsApp (`logged_out`) atau sesi tidak dapat dipulihkan (`error`).
+ */
+const NEEDS_QR = ["disconnected", "logged_out", "error", "needs_repair"];
 
 export default function DevicesPage() {
   const router = useRouter();
@@ -28,6 +44,8 @@ export default function DevicesPage() {
   const [phoneNumberId, setPhoneNumberId] = useState("");
   const [accessToken, setAccessToken] = useState("");
   const [pairing, setPairing] = useState<Record<string, PairingStatus>>({});
+  /** Device yang sedang menjalani penautan ulang manual (kartunya menampilkan "Menyiapkan QR baru…"). */
+  const [relinking, setRelinking] = useState<Record<string, boolean>>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -101,6 +119,38 @@ export default function DevicesPage() {
     }
   }
 
+  /**
+   * Memaksa penautan ulang: kredensial lokal dihapus di gateway dan WhatsApp
+   * mengeluarkan QR baru. Dipakai bila sesi lama sudah tidak dapat dipulihkan
+   * supaya pengguna tidak terjebak menunggu status `connecting`.
+   */
+  async function relink(device: Device) {
+    if (!window.confirm(`Tautkan ulang "${device.device_name}"? Sesi lama dihapus dan QR baru dibuat.`)) return;
+    setError("");
+    setRelinking((current) => ({ ...current, [device.id]: true }));
+    try {
+      await api<PairingStatus>(`/devices/${device.id}/reconnect`, { method: "POST" });
+      // Gateway menghapus kredensial lalu membuka socket baru; respons pertama bisa
+      // masih 'disconnected' (socket lama sedang ditutup). Polling sampai QR baru
+      // muncul supaya kartu tidak menampilkan status palsu.
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 2_000));
+        const status = await api<PairingStatus>(`/devices/${device.id}/status`);
+        setPairing((current) => ({ ...current, [device.id]: status }));
+        if (status.qr_code || status.status === "connected" || status.status === "error") break;
+      }
+      await loadDevices();
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Penautan ulang gagal dijalankan.");
+    } finally {
+      setRelinking((current) => {
+        const next = { ...current };
+        delete next[device.id];
+        return next;
+      });
+    }
+  }
+
   async function remove(device: Device) {
     if (!window.confirm(`Hapus koneksi "${device.device_name}"?`)) return;
     setError("");
@@ -166,20 +216,48 @@ export default function DevicesPage() {
           <h2 className="text-base font-semibold text-slate-900">Koneksi Anda</h2>
           {devices.length === 0 ? <p className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">Belum ada koneksi WhatsApp.</p> : devices.map((device) => {
             const liveStatus = pairing[device.id];
+            const isRelinking = Boolean(relinking[device.id]);
+            const statusText = isRelinking ? "menyiapkan_qr" : (liveStatus?.status ?? device.connection_status);
+            const needsQr = device.provider === "baileys" && NEEDS_QR.includes(statusText);
+            const healthy = statusText === "connected";
+            const tone = healthy
+              ? "bg-emerald-50 text-emerald-700"
+              : needsQr || isRelinking
+                ? "bg-amber-50 text-amber-800"
+                : "bg-slate-100 text-slate-600";
             return (
               <article key={device.id} className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 sm:grid-cols-[1fr_auto]">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-semibold text-slate-900">{device.device_name}</h3>
                     <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{device.provider === "meta_cloud" ? "Meta Cloud API" : "Baileys · eksperimental"}</span>
-                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">{liveStatus?.status ?? device.connection_status}</span>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${tone}`}>{statusText}</span>
                   </div>
                   <p className="mt-1 text-sm text-slate-500">{device.phone_number}</p>
+                  {needsQr && (
+                    <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                      Sesi ini terputus dan tidak dapat dipulihkan otomatis. Tekan <strong>Tautkan ulang</strong> untuk menampilkan QR baru, lalu pindai dari WhatsApp → Perangkat tertaut.
+                    </p>
+                  )}
+                  {isRelinking && (
+                    <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                      Kredensial lama dihapus, menyiapkan QR baru… QR biasanya muncul beberapa detik lagi; biarkan halaman ini terbuka.
+                    </p>
+                  )}
+                  {(liveStatus?.last_close_reason ?? liveStatus?.last_error) && (
+                    <p className="mt-2 text-xs text-slate-500">
+                      Diagnostik: {liveStatus?.last_close_reason ? `putus terakhir=${liveStatus.last_close_reason}` : ""}
+                      {liveStatus?.last_error ? ` · ${liveStatus.last_error}` : ""}
+                      {liveStatus?.auto_repairs ? ` · penautan ulang otomatis=${liveStatus.auto_repairs}` : ""}
+                      {liveStatus?.cached_messages != null ? ` · cache pesan=${liveStatus.cached_messages}` : ""}
+                    </p>
+                  )}
                   {device.provider === "baileys" && liveStatus?.qr_code && <div className="mt-4 w-fit rounded-xl border border-slate-200 bg-white p-3"><Image src={liveStatus.qr_code} alt={`QR pairing ${device.device_name}`} width={220} height={220} unoptimized /></div>}
                   {device.provider === "meta_cloud" && <p className="mt-2 text-xs text-slate-500">Kredensial tersimpan. Pengiriman aktual tetap bergantung pada validitas token dan konfigurasi Meta.</p>}
                 </div>
                 <div className="flex items-start gap-2">
-                  {device.provider === "baileys" && <Button variant="secondary" size="sm" onClick={() => void reconnect(device)}><Link2 size={14} /> QR</Button>}
+                  {device.provider === "baileys" && (!needsQr || isRelinking) && <Button variant="secondary" size="sm" disabled={isRelinking} onClick={() => void reconnect(device)}><Link2 size={14} /> QR</Button>}
+                  {device.provider === "baileys" && needsQr && !isRelinking && <Button variant="secondary" size="sm" onClick={() => void relink(device)}><RefreshCw size={14} /> Tautkan ulang</Button>}
                   <Button variant="danger" size="icon" aria-label={`Hapus ${device.device_name}`} onClick={() => void remove(device)}><Trash2 size={15} /></Button>
                 </div>
               </article>

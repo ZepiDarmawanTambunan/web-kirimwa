@@ -11,6 +11,24 @@ pub struct SessionStatus {
     /// (mis. setelah gateway restart) penerima bisa melihat "Menunggu pesan ini".
     #[serde(default)]
     pub cached_messages: Option<u64>,
+    /// Apakah kredensial perangkat masih terdaftar di WhatsApp.
+    #[serde(default)]
+    pub paired: Option<bool>,
+    /// Berapa kali gateway menautkan ulang perangkat (QR baru) otomatis.
+    #[serde(default)]
+    pub auto_repairs: Option<u64>,
+    /// Alasan putus terakhir dari WhatsApp, mis. `loggedOut` atau `connectionClosed`.
+    #[serde(default)]
+    pub last_close_reason: Option<String>,
+    /// Diagnostik terakhir dari gateway (mis. `reconnect_exhausted:connectionLost`).
+    #[serde(default)]
+    pub last_error: Option<String>,
+    /// Jumlah pesan yang gagal didekripsi — indikasi sesi Baileys tidak sehat.
+    #[serde(default)]
+    pub decrypt_failures: Option<u64>,
+    /// Berapa kali WhatsApp meminta ulang pesan masuk yang tidak ada di cache.
+    #[serde(default)]
+    pub getmessage_misses: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -78,6 +96,35 @@ pub async fn baileys_session_status(
     }
     response.json().await.map_err(|error| {
         tracing::error!(%error, "Invalid Baileys session status response");
+        ApiError::Upstream
+    })
+}
+
+/// Memaksa gateway membuang kredensial lokal dan menautkan ulang perangkat,
+/// sehingga WhatsApp mengeluarkan QR baru untuk dipindai.
+pub async fn restart_baileys_session(
+    state: &AppState,
+    device_id: &str,
+) -> Result<SessionStatus, ApiError> {
+    let response = state
+        .http
+        .post(format!(
+            "{}/sessions/{device_id}/reset",
+            state.config.gateway_url.trim_end_matches('/')
+        ))
+        .bearer_auth(&state.config.gateway_token)
+        .send()
+        .await
+        .map_err(|error| {
+            tracing::error!(%error, device_id, "Baileys gateway is unavailable during relink");
+            ApiError::Upstream
+        })?;
+    if !response.status().is_success() {
+        tracing::error!(status = %response.status(), device_id, "Baileys session relink failed");
+        return Err(ApiError::Upstream);
+    }
+    response.json().await.map_err(|error| {
+        tracing::error!(%error, device_id, "Invalid Baileys session relink response");
         ApiError::Upstream
     })
 }

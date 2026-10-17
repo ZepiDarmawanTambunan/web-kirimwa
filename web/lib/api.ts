@@ -35,6 +35,18 @@ export type SessionStatus = {
   qr_code: string | null;
   /** Jumlah pesan terkirim yang disimpan gateway untuk menjawab retry receipt WhatsApp. */
   cached_messages?: number;
+  /** Apakah kredensial perangkat masih terdaftar di WhatsApp. */
+  paired?: boolean | null;
+  /** Berapa kali gateway menautkan ulang perangkat (QR baru) secara otomatis. */
+  auto_repairs?: number | null;
+  /** Alasan putus terakhir dari WhatsApp, mis. `loggedOut` atau `connectionClosed`. */
+  last_close_reason?: string | null;
+  /** Diagnostik terakhir dari gateway, mis. `reconnect_exhausted:connectionLost`. */
+  last_error?: string | null;
+  /** Jumlah pesan yang gagal didekripsi — indikasi sesi Baileys tidak sehat. */
+  decrypt_failures?: number | null;
+  /** Berapa kali WhatsApp meminta ulang pesan masuk yang tidak ada di cache. */
+  getmessage_misses?: number | null;
 };
 export type QueuedMessage = { id: string; device_id: string; target: string; status: string };
 export type MessageList = { messages: Message[] };
