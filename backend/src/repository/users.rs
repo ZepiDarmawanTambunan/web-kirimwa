@@ -1,10 +1,10 @@
 use crate::{error::ApiError, models::User};
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use sqlx::MySqlPool;
 
 pub async fn by_email(pool: &MySqlPool, email: &str) -> Result<Option<User>, ApiError> {
     Ok(sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, role, is_active, api_key_hash, api_key_prefix FROM users WHERE email = ?",
+        "SELECT id, email, password_hash, role, is_active FROM users WHERE email = ?",
     )
     .bind(email)
     .fetch_optional(pool)
@@ -13,7 +13,7 @@ pub async fn by_email(pool: &MySqlPool, email: &str) -> Result<Option<User>, Api
 
 pub async fn by_api_key_hash(pool: &MySqlPool, hash: &str) -> Result<Option<User>, ApiError> {
     Ok(sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, role, is_active, api_key_hash, api_key_prefix FROM users WHERE api_key_hash = ?",
+        "SELECT id, email, password_hash, role, is_active FROM users WHERE api_key_hash = ?",
     )
     .bind(hash)
     .fetch_optional(pool)
@@ -22,7 +22,7 @@ pub async fn by_api_key_hash(pool: &MySqlPool, hash: &str) -> Result<Option<User
 
 pub async fn by_id(pool: &MySqlPool, id: &str) -> Result<Option<User>, ApiError> {
     Ok(sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, role, is_active, api_key_hash, api_key_prefix FROM users WHERE id = ?",
+        "SELECT id, email, password_hash, role, is_active FROM users WHERE id = ?",
     )
     .bind(id)
     .fetch_optional(pool)

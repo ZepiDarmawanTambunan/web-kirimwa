@@ -8,8 +8,6 @@ pub struct User {
     pub password_hash: String,
     pub role: String,
     pub is_active: bool,
-    pub api_key_hash: Option<String>,
-    pub api_key_prefix: Option<String>,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]

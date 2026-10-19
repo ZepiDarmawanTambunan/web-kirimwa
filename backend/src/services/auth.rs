@@ -7,7 +7,6 @@ use jsonwebtoken::{encode, EncodingKey, Header};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use sqlx::MySqlPool;
 
 #[derive(Serialize, Deserialize)]
 pub struct Claims {

@@ -4,7 +4,6 @@ use crate::{
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 use subtle::ConstantTimeEq;
 

@@ -76,51 +76,6 @@ pub async fn set_provider_result(
     Ok(())
 }
 
-pub async fn set_failed(pool: &MySqlPool, ids: &[String]) -> Result<(), ApiError> {
-    for id in ids {
-        sqlx::query("UPDATE messages SET status = 'Failed' WHERE id = ?")
-            .bind(id)
-            .execute(pool)
-            .await?;
-    }
-    Ok(())
-}
-
-pub async fn set_submission_unknown(pool: &MySqlPool, ids: &[String]) -> Result<(), ApiError> {
-    for id in ids {
-        sqlx::query("UPDATE messages SET status = 'SubmissionUnknown' WHERE id = ?")
-            .bind(id)
-            .execute(pool)
-            .await?;
-    }
-    Ok(())
-}
-
-pub async fn set_provider_ids(pool: &MySqlPool, rows: &[(String, String)]) -> Result<(), ApiError> {
-    let mut transaction = pool.begin().await?;
-    for (local_id, provider_id) in rows {
-        sqlx::query("UPDATE messages SET provider_id = ? WHERE id = ?")
-            .bind(provider_id)
-            .bind(local_id)
-            .execute(&mut *transaction)
-            .await?;
-        sqlx::query(
-            "UPDATE messages AS m JOIN pending_webhook_status AS p ON p.provider_id = m.provider_id \
-             SET m.state_id = COALESCE(p.state_id, m.state_id), m.status = COALESCE(p.status, m.status), \
-             m.state = COALESCE(p.state, m.state) WHERE m.id = ?",
-        )
-        .bind(local_id)
-        .execute(&mut *transaction)
-        .await?;
-        sqlx::query("DELETE FROM pending_webhook_status WHERE provider_id = ?")
-            .bind(provider_id)
-            .execute(&mut *transaction)
-            .await?;
-    }
-    transaction.commit().await?;
-    Ok(())
-}
-
 pub async fn update_status(
     pool: &MySqlPool,
     provider_id: &str,

@@ -2,6 +2,20 @@
 
 A modular-monolith MVP with one dashboard and REST API for WhatsApp messaging. Each device uses exactly one provider: Meta WhatsApp Cloud API or a separate experimental Baileys session. There is no hidden provider fallback or automatic attempt to connect the same number to both.
 
+## Repository layout
+
+```
+web-kirimwa/
+├── backend/   # Rust REST API (axum + sqlx/MySQL); runs migrations on startup
+├── web/       # Next.js dashboard (Node 22, standalone output, Biome lint)
+├── baileys/   # Experimental WhatsApp Web gateway (single index.js, Express)
+└── docker-compose.yml
+```
+
+Host ports come from `.env` (`API_PORT` 8081, `WEB_PORT` 3003, internal
+`BAILEYS_PORT` 4000); MySQL is not published to the host. Working rules for AI
+agents and contributors are in `AGENTS.md`.
+
 ## Providers and limitations
 
 - **Meta Cloud API:** Official Meta API. This MVP accepts a customer's Meta Phone Number ID and access token manually per device. Tokens are encrypted at rest with AES-256-GCM. Embedded Signup, token exchange/refresh, and Meta delivery-status webhooks are not implemented.
@@ -199,12 +213,15 @@ Run from the repository root:
 ```sh
 cd backend
 cargo fmt --check
-cargo test
+cargo clippy --all-targets -- -D warnings
+cargo test --locked
 cd ../web
 npm ci
 npm run lint
 npm run typecheck
 npm run build
+cd ../baileys
+node --check index.js
 cd ..
 docker compose config
 ```
